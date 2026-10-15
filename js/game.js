@@ -94,8 +94,10 @@ G.start = function (fresh, diff) {
     POP.generate(G.state.seed);
     G.applyPopState();
     TRAFFIC.init();
-    G.enterMap(G.state.map, null, null, G.state.dir, true);
+    // Konum enterMap'ten önce yüklenir: enterMap otomatik kaydettiği için aksi halde
+    // kayıttaki konum varsayılan konumla ezilirdi.
     G.player.x = G.state.px; G.player.y = G.state.py;
+    G.enterMap(G.state.map, null, null, G.state.dir, true);
     G.snapCam();
     G.running = true;
     UI.toast(`Gün ${G.state.day} • ${G.dayName()} • ${U.fmt(G.state.time)}`);
@@ -478,19 +480,40 @@ G.staticBlocked = function (x, y) {
 G.unstick = function () {
   const p = G.player;
   const free = (x, y) => !G.staticBlocked(x, y) && [[0, 1], [0, -1], [1, 0], [-1, 0]].some(([dx, dy]) => !G.staticBlocked(x + dx * 6, y + dy * 6));
-  if (free(p.x, p.y)) return;
+  // Şehirde Jade'in bulunduğu yerden yola/kaldırıma yürüyerek ulaşılabilmeli; yoksa kapana kısılmıştır.
+  const reachesStreet = (x, y) => {
+    if (G.map.id !== 'town') return true;
+    const m = G.map, start = [Math.floor(x / TS), Math.floor(y / TS)];
+    const seen = new Set([start.join(',')]), q = [start];
+    for (let i = 0; i < q.length && i < 3000; i++) {
+      const [cx, cy] = q[i];
+      const t = m.tiles[cy * m.w + cx];
+      if (t === 'sidewalk' || t === 'road') return true;
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const nx = cx + dx, ny = cy + dy, k = nx + ',' + ny;
+        if (nx < 0 || ny < 0 || nx >= m.w || ny >= m.h || seen.has(k) || WORLD.isSolid(m, nx, ny)) continue;
+        seen.add(k); q.push([nx, ny]);
+      }
+    }
+    return false;
+  };
+  if (free(p.x, p.y) && reachesStreet(p.x, p.y)) return;
   const tx0 = Math.floor(p.x / TS), ty0 = Math.floor(p.y / TS);
-  for (let r = 1; r <= 8; r++) {
+  for (let r = 1; r <= 24; r++) {
     let best = null;
     for (let ty = ty0 - r; ty <= ty0 + r; ty++) for (let tx = tx0 - r; tx <= tx0 + r; tx++) {
       if (Math.max(Math.abs(tx - tx0), Math.abs(ty - ty0)) !== r) continue;
       const x = tx * TS + 8, y = ty * TS + 12;
-      if (!free(x, y)) continue;
+      if (G.map.id === 'town' && G.map.tiles[ty * G.map.w + tx] !== 'sidewalk') continue;
+      if (!free(x, y) || !reachesStreet(x, y)) continue;
       const d = Math.hypot(x - p.x, y - p.y);
       if (!best || d < best.d) best = { x, y, d };
     }
     if (best) { p.x = best.x; p.y = best.y; return; }
   }
+  // Hiç boş yer yoksa (bozuk kayıt) şehirde karakolun önüne, iç mekânda kapının önüne alınır.
+  if (G.map.id === 'town') { const st = WORLD.building('station'); p.x = st.door.x * TS + 8; p.y = (st.door.y + 1) * TS + 12; }
+  else if (G.map.door) { p.x = G.map.door.x * TS + 8; p.y = (G.map.door.y - 1) * TS + 12; }
 };
 
 G.dynSolid = function (tx, ty) {
