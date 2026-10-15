@@ -1,0 +1,46 @@
+name: Windows paketi
+
+# Oyun her güncellendiğinde Windows sürümünü (Electron) derler ve "beta" sürüm
+# sayfasına TheDeceiver.zip olarak koyar.
+on:
+  push:
+    branches: [main, master, ccr-6c2925ef-as7al4]
+    paths: ['index.html', 'css/**', 'js/**', 'assets/**', 'desktop/**', '.github/workflows/windows.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: windows-release
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          cache: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: go-winres
+        run: |
+          go install github.com/tc-hib/go-winres@v0.3.3
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+      - name: Paketle
+        run: ./desktop/build.sh
+      - name: Sürüm sayfasına yükle
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete beta --yes --cleanup-tag || true
+          git push origin :refs/tags/beta 2>/dev/null || true
+          gh release create beta desktop/dist/TheDeceiver.zip \
+            --title "The Deceiver v2.1 Beta" \
+            --notes-file desktop/RELEASE.md \
+            --prerelease \
+            --target "${{ github.sha }}"
