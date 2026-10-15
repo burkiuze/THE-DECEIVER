@@ -1,7 +1,7 @@
 **The Deceiver v2.1 (BETA)**: The Mentalist'ten esinlenen 2D piksel dedektif oyunu.
 
 ### Kurulum (Windows 10/11, 64 bit)
-1. Aşağıdaki **TheDeceiver.exe**'yi indir.
+1. Aşağıdaki **TheDeceiver.zip**'i indirip çıkar ya da doğrudan **TheDeceiver.exe**'yi indir (ikisi aynı oyun; tarayıcı exe'yi engellerse zipi kullan).
 2. Çift tıkla. Tek dosyadır, kurulum yok. İlk açılış birkaç saniye sürer, sonrakiler hızlıdır.
 3. Windows "bilgisayarınızı korudu" derse: **Ek bilgi → Yine de çalıştır**.
 
