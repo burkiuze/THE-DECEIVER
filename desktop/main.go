@@ -1,9 +1,8 @@
 // The Deceiver masaüstü başlatıcısı.
 //
 // Oyun dosyaları exe'nin içine gömülüdür. Başlatıcı bunları yalnızca bu bilgisayardan
-// erişilebilen küçük bir yerel sunucuyla (127.0.0.1) sunar ve oyunu Edge/Chrome'un
-// "uygulama" penceresinde açar. Pencere kapanınca (ya da oyun sekmesi kalp atışı
-// göndermeyi bırakınca) başlatıcı da kapanır.
+// erişilebilen küçük bir yerel sunucuyla (127.0.0.1) sunar ve oyunu kendi penceresinde
+// açar (Windows'ta WebView2). Pencere kapanınca program da kapanır.
 package main
 
 import (
@@ -14,7 +13,6 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sync/atomic"
 	"time"
@@ -24,10 +22,8 @@ import (
 var gameFS embed.FS
 
 const (
-	appName      = "The Deceiver"
-	fixedPort    = 47321 // sabit port: kayıtlar (localStorage) adrese bağlıdır
-	firstPingMax = 90 * time.Second
-	pingTimeout  = 150 * time.Second
+	appName   = "The Deceiver"
+	fixedPort = 47321 // sabit port: kayıtlar (localStorage) adrese bağlıdır
 )
 
 var lastPing atomic.Int64
@@ -48,10 +44,9 @@ func main() {
 
 	ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", fixedPort))
 	if err != nil {
-		// Oyun zaten açıksa yeni pencereyi aynı adrese yönlendir.
-		url := fmt.Sprintf("http://127.0.0.1:%d/", fixedPort)
-		if isOurs(url) {
-			openWindow(url)
+		// Oyun zaten açıksa o pencereyi öne getir.
+		if isOurs(fmt.Sprintf("http://127.0.0.1:%d/", fixedPort)) {
+			focusExisting()
 			return
 		}
 		ln, err = net.Listen("tcp", "127.0.0.1:0")
@@ -76,36 +71,7 @@ func main() {
 	srv := &http.Server{Handler: mux, ReadHeaderTimeout: 10 * time.Second}
 	go func() { _ = srv.Serve(ln) }()
 
-	started := time.Now()
-	windowDone := openWindow(url)
-
-	for {
-		time.Sleep(time.Second)
-		lp := lastPing.Load()
-		if lp == 0 {
-			if time.Since(started) > firstPingMax {
-				if windowDone == nil {
-					fail("Oyun penceresi açılamadı. Tarayıcında şu adresi açmayı dene:\n" + url)
-				}
-				return
-			}
-			continue
-		}
-		// Kendi penceremiz kapandıysa hemen çık; aksi halde kalp atışını bekle.
-		if windowDone != nil {
-			select {
-			case <-windowDone:
-				if time.Since(started) > 5*time.Second {
-					return
-				}
-				windowDone = nil // pencere başka bir Edge sürecine devredildi
-			default:
-			}
-		}
-		if time.Since(time.Unix(0, lp)) > pingTimeout {
-			return
-		}
-	}
+	runWindow(url)
 }
 
 func isOurs(url string) bool {
@@ -116,60 +82,6 @@ func isOurs(url string) bool {
 	}
 	res.Body.Close()
 	return res.Header.Get("X-App") == "the-deceiver"
-}
-
-// openWindow oyunu uygulama penceresinde açar. Pencere sürecini izleyebiliyorsa
-// süreç bitince kapanan bir kanal döndürür; varsayılan tarayıcıya düştüyse nil.
-func openWindow(url string) <-chan struct{} {
-	if bin := findBrowser(); bin != "" {
-		profile := filepath.Join(dataDir(), "browser")
-		_ = os.MkdirAll(profile, 0o755)
-		cmd := exec.Command(bin,
-			"--app="+url,
-			"--user-data-dir="+profile,
-			"--no-first-run",
-			"--no-default-browser-check",
-			"--disable-features=Translate,msEdgeSidebarV2,msHubApps",
-			"--window-size=1280,800",
-		)
-		if err := cmd.Start(); err == nil {
-			done := make(chan struct{})
-			go func() { _ = cmd.Wait(); close(done) }()
-			return done
-		}
-	}
-	if err := openDefault(url); err != nil {
-		fail("Tarayıcı açılamadı. Şu adresi elle aç:\n" + url)
-	}
-	return nil
-}
-
-func findBrowser() string {
-	var cands []string
-	for _, env := range []string{"ProgramFiles(x86)", "ProgramFiles", "LocalAppData"} {
-		base := os.Getenv(env)
-		if base == "" {
-			continue
-		}
-		cands = append(cands,
-			filepath.Join(base, "Microsoft", "Edge", "Application", "msedge.exe"),
-			filepath.Join(base, "Google", "Chrome", "Application", "chrome.exe"),
-		)
-	}
-	if extra := os.Getenv("DECEIVER_BROWSER"); extra != "" {
-		cands = append([]string{extra}, cands...)
-	}
-	for _, c := range cands {
-		if st, err := os.Stat(c); err == nil && !st.IsDir() {
-			return c
-		}
-	}
-	for _, name := range []string{"msedge", "chrome", "chromium", "google-chrome"} {
-		if p, err := exec.LookPath(name); err == nil {
-			return p
-		}
-	}
-	return ""
 }
 
 func dataDir() string {

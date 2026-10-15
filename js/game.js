@@ -328,6 +328,7 @@ G.bindInput = function () {
     if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' ', 'Tab'].includes(k) && !typing) e.preventDefault();
     if (typing && k !== 'Escape') return;
     SFX.ensure();
+    if (k === 'F11') { e.preventDefault(); SETTINGS.toggleFull(); return; }
     if (!G.running) return;
     if ((k === 'm' || k === 'M') && !UI.busy()) { SFX.muted = !SFX.muted; UI.toast(SFX.muted ? 'Ses kapalı' : 'Ses açık'); return; }
     if (UI.key(k)) return;

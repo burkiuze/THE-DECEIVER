@@ -1,10 +1,26 @@
 'use strict';
 // Ana menü, zorluk seçimi, kayıtlı oyun, ayarlar, “Bizi Takip Et”, duraklatma ve oyun sonu.
 
-const SETTINGS = { volume: 0.8, textSpeed: 'normal', shake: true };
+const SETTINGS = { volume: 0.8, textSpeed: 'normal', shake: true, fullscreen: false };
 const SETTINGS_KEY = 'the-deceiver-settings';
 try { Object.assign(SETTINGS, JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}')); } catch (e) { /* depolama kapalı */ }
-SETTINGS.save = function () { try { localStorage.setItem(SETTINGS_KEY, JSON.stringify({ volume: SETTINGS.volume, textSpeed: SETTINGS.textSpeed, shake: SETTINGS.shake })); } catch (e) { /* yok say */ } };
+SETTINGS.save = function () { try { localStorage.setItem(SETTINGS_KEY, JSON.stringify({ volume: SETTINGS.volume, textSpeed: SETTINGS.textSpeed, shake: SETTINGS.shake, fullscreen: SETTINGS.fullscreen })); } catch (e) { /* yok say */ } };
+
+// Masaüstü sürümü (TheDeceiver.exe) pencereyi kendisi yönetir: tam ekran ve çıkış.
+const NATIVE = {
+  ok: () => typeof window.deceiverFullscreen === 'function',
+  full: false,
+};
+SETTINGS.isFull = () => (NATIVE.ok() ? NATIVE.full : !!document.fullscreenElement);
+SETTINGS.setFull = function (on) {
+  SETTINGS.fullscreen = on; SETTINGS.save();
+  if (NATIVE.ok()) { NATIVE.full = on; return Promise.resolve(window.deceiverFullscreen(on)); }
+  if (on && !document.fullscreenElement && document.documentElement.requestFullscreen) return document.documentElement.requestFullscreen();
+  if (!on && document.fullscreenElement) return document.exitFullscreen();
+  return Promise.resolve();
+};
+SETTINGS.toggleFull = () => SETTINGS.setFull(!SETTINGS.isFull());
+window.addEventListener('load', () => { if (NATIVE.ok() && SETTINGS.fullscreen) SETTINGS.setFull(true); });
 
 // Zorluk seviyeleri
 const DIFFS = {
@@ -71,6 +87,7 @@ MENU.render = function () {
       btn('Ayarlar', () => { MENU.panel = 'settings'; MENU.render(); }),
       btn('Bizi Takip Et', () => { MENU.panel = 'follow'; MENU.render(); }),
       btn('Nasıl Oynanır?', () => G.howTo(), 'alt'),
+      ...(typeof window.deceiverQuit === 'function' ? [btn('Oyundan Çık', () => window.deceiverQuit(), 'alt')] : []),
     );
   } else if (MENU.panel === 'diff') {
     box.appendChild(H('h2', null, 'Zorluk seç'));
@@ -133,11 +150,11 @@ MENU.settingsForm = function () {
     seg.appendChild(b);
   }
   wrap.appendChild(H('div', { class: 'set-row' }, H('span', null, 'Yazı hızı'), seg));
-  const fs = H('button', { class: 'opt' }, document.fullscreenElement ? 'Tam ekrandan çık' : 'Tam ekran');
+  const fs = H('button', { class: 'opt' }, SETTINGS.isFull() ? 'Tam ekrandan çık' : 'Tam ekran (F11)');
   fs.addEventListener('click', () => {
-    const p = document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen && document.documentElement.requestFullscreen();
+    const p = SETTINGS.toggleFull();
     if (p && p.catch) p.catch(() => UI.toast('Tam ekran bu pencerede desteklenmiyor.'));
-    setTimeout(() => { fs.textContent = document.fullscreenElement ? 'Tam ekrandan çık' : 'Tam ekran'; }, 300);
+    setTimeout(() => { fs.textContent = SETTINGS.isFull() ? 'Tam ekrandan çık' : 'Tam ekran (F11)'; }, 300);
   });
   wrap.appendChild(H('div', { class: 'set-row' }, H('span', null, 'Ekran'), fs));
   wrap.appendChild(H('div', { class: 'set-row keys' }, H('span', null, 'Kontroller'), H('div', { class: 'small' }, 'WASD/Oklar: yürü, sür • Shift: koş • E: konuş/incele/arabaya bin • Q: Gözlem • F: Dosya • P: Telefon • Esc: Menü • M: Ses')));
