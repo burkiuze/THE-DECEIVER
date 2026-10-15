@@ -1,6 +1,6 @@
 #!/usr/bin/env sh
-# Windows için TheDeceiver.zip üretir: Electron çalışma zamanı + oyun, kendi simgesi ve adıyla.
-# Gerekenler: curl, unzip, zip, sha256sum, npx (Node), go-winres (go install github.com/tc-hib/go-winres@latest)
+# Windows için tek dosyalık TheDeceiver.exe üretir (Electron + oyun içinde gömülü).
+# Gerekenler: curl, unzip, zip, sha256sum, Go, npx (Node), go-winres (go install github.com/tc-hib/go-winres@latest)
 set -eu
 cd "$(dirname "$0")"
 EV=44.4.5
@@ -34,6 +34,12 @@ rm -rf "$STAGE"
 mv "$OUT/electron.exe" "$OUT/TheDeceiver.exe"
 go-winres patch --in winres.json --no-backup --authenticode remove "$OUT/TheDeceiver.exe"
 
-cp OKU.txt "$OUT/"
-(cd dist && zip -9 -q -r TheDeceiver.zip TheDeceiver)
-echo "Hazır: desktop/dist/TheDeceiver.zip"
+# Tek dosya: Electron klasörü zip'lenip küçük bir Go başlatıcısına gömülür -> dist/TheDeceiver.exe
+(cd "$OUT" && zip -9 -q -r ../../launcher/payload.zip .)
+ID=$(sha256sum launcher/payload.zip | cut -c1-12)
+cp icon.ico launcher/icon.ico
+(cd launcher && go-winres make --in ../winres.json --arch amd64 >/dev/null && \
+  GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -H=windowsgui -X main.payloadID=$ID" -o ../dist/TheDeceiver.exe .)
+rm -f launcher/payload.zip launcher/icon.ico launcher/*.syso
+rm -rf "$OUT"
+echo "Hazır: desktop/dist/TheDeceiver.exe"

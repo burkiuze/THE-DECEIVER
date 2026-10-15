@@ -39,7 +39,7 @@ jobs:
         run: |
           gh release delete beta --yes --cleanup-tag || true
           git push origin :refs/tags/beta 2>/dev/null || true
-          gh release create beta desktop/dist/TheDeceiver.zip \
+          gh release create beta desktop/dist/TheDeceiver.exe \
             --title "The Deceiver v2.1 Beta" \
             --notes-file desktop/RELEASE.md \
             --prerelease \

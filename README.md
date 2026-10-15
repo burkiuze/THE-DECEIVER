@@ -9,7 +9,7 @@ rastgele üretilmiş** bir cinayet dosyası gelir. Görevin: olay yerine git, ip
 
 ## Nasıl çalıştırılır?
 
-**Windows:** `TheDeceiver.zip`’i çıkar ve `TheDeceiver` klasöründeki `TheDeceiver.exe`’yi çalıştır. Oyun kendi
+**Windows:** tek dosyalık `TheDeceiver.exe`’yi (GitHub Releases) çalıştır. Oyun kendi
 motoruyla (gömülü Chromium / Electron) kendi penceresinde açılır; Edge ya da başka bir tarayıcı kullanmaz,
 internet gerekmez. F11 tam ekran, menüde “Oyundan Çık”. Kayıtlar `%LOCALAPPDATA%\TheDeceiver` klasöründe durur.
 Paketi kendin üretmek için: `desktop/build.sh` (curl, unzip, zip, Node/npx ve `go-winres` gerekir).
