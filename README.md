@@ -9,10 +9,10 @@ rastgele üretilmiş** bir cinayet dosyası gelir. Görevin: olay yerine git, ip
 
 ## Nasıl çalıştırılır?
 
-**Windows:** `TheDeceiver.zip` içindeki `TheDeceiver.exe`’yi çalıştır. Oyun tarayıcı açmadan kendi
-penceresinde açılır (WebView2, internet gerekmez). F11 tam ekran, menüde “Oyundan Çık”.
-Kayıtlar `%LOCALAPPDATA%\TheDeceiver` klasöründe durur.
-Exe’yi kendin üretmek için: `desktop/build.sh` (Go 1.22+ ve `zip` gerekir).
+**Windows:** `TheDeceiver.zip`’i çıkar ve `TheDeceiver` klasöründeki `TheDeceiver.exe`’yi çalıştır. Oyun kendi
+motoruyla (gömülü Chromium / Electron) kendi penceresinde açılır; Edge ya da başka bir tarayıcı kullanmaz,
+internet gerekmez. F11 tam ekran, menüde “Oyundan Çık”. Kayıtlar `%LOCALAPPDATA%\TheDeceiver` klasöründe durur.
+Paketi kendin üretmek için: `desktop/build.sh` (curl, unzip, zip, Node/npx ve `go-winres` gerekir).
 
 **Tarayıcı:** Kurulum yok, derleme yok. `index.html` dosyasını tarayıcıda açman yeterli.
 
@@ -114,7 +114,7 @@ js/menu.js        Ana menü, zorluk seviyeleri, ayarlar, duraklat menüsü, oyun
 js/game.js        Oyun döngüsü, kamera, ışıklandırma, NPC simülasyonu, gün geçişi
 js/phone.js       Telefon: harita/GPS, yön oku, mesajlar, rehber
 assets/           Logo, simge ve Pixelify Sans yazı tipi (OFL)
-desktop/          Windows başlatıcısı (Go + WebView2): oyunu exe'ye gömer, kendi penceresinde açar
+desktop/          Windows uygulaması (Electron): pencere, tam ekran, çıkış ve paketleme betiği
 ```
 
 Harici kütüphane yok; oyun tamamen çevrimdışı çalışır. “Pixelify Sans” yazı tipi `assets/fonts` içinde

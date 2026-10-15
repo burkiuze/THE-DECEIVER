@@ -1,0 +1,8 @@
+{
+  "name": "the-deceiver",
+  "productName": "The Deceiver",
+  "version": "2.1.0",
+  "description": "The Deceiver: Bir Jade Vakası",
+  "main": "main.js",
+  "private": true
+}

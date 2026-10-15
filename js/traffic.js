@@ -207,7 +207,7 @@ TRAFFIC.lights = function (out) {
 // Kaldırımda 3 karoluk boş park yeri bul (kapı ve dolu yerlerden uzak). Dönüş: araba merkezi (px)
 TRAFFIC.curb = function (tx, ty, used, maxScan) {
   const tm = WORLD.maps.town;
-  const okTile = (x, y) => !WORLD.isSolid(tm, x, y) && !tm.doors.some((d) => Math.abs(d.x - x) <= 1 && d.y + 1 >= y - 1 && d.y <= y);
+  const okTile = (x, y) => tm.tiles[y * tm.w + x] === 'sidewalk' && !WORLD.isSolid(tm, x, y) && !tm.doors.some((d) => Math.abs(d.x - x) <= 1 && d.y + 1 >= y - 1 && d.y <= y);
   for (let k = 0; k < (maxScan || 14); k++) {
     for (const dx of [k, -k]) {
       const x = tx + dx;

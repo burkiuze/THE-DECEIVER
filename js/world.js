@@ -284,7 +284,17 @@ WORLD.buildTown = function () {
   // gazete kutusu ve otobüs durakları
   const nb = WORLD.building('newspaper');
   if (nb) { const x = nb.door.x - 2, y = nb.door.y + 1; if (!m.solid[idx(x, y)]) { solid(x, y); addObj('newsbox', ART.prop('newsbox'), x * TS + 2, y * TS - 4, (y + 1) * TS - 1); } }
-  [[24, 29], [84, 45]].forEach(([x, y]) => { if (tile(x, y) !== 'sidewalk') return; solid(x, y); solid(x + 1, y); addObj('busstop', ART.prop('busstop'), x * TS - 1, y * TS - 20, (y + 1) * TS); });
+  // Durak kapıların önüne konmaz: uygun iki boş kaldırım karosu bulunana kadar kaydırılır.
+  const doorNear = (x, y) => m.doors.some((d) => Math.abs(d.x - x) <= 2 && Math.abs(d.y - y) <= 2);
+  const stopOk = (x, y) => [x, x + 1].every((tx) => tile(tx, y) === 'sidewalk' && !m.solid[idx(tx, y)] && !doorNear(tx, y));
+  [[22, 32], [84, 45]].forEach(([x0, y]) => {
+    for (const dx of [0, 3, -3, 6, -6, 9, -9, 12, -12]) {
+      const x = x0 + dx;
+      if (!stopOk(x, y)) continue;
+      solid(x, y); solid(x + 1, y); addObj('busstop', ART.prop('busstop'), x * TS - 1, y * TS - 20, (y + 1) * TS);
+      return;
+    }
+  });
 
   // --- zemin tuvali
   const [gc, gg] = ART.canvas(W * TS, H * TS);

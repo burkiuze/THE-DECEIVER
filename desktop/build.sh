@@ -1,15 +1,39 @@
 #!/usr/bin/env sh
-# Windows için TheDeceiver.exe üretir: oyun dosyalarını gömer, simgeyi ekler ve zip'ler.
-# Gerekenler: Go 1.22+ (modüller için internet), zip. Simge için: go install github.com/akavel/rsrc@latest
+# Windows için TheDeceiver.zip üretir: Electron çalışma zamanı + oyun, kendi simgesi ve adıyla.
+# Gerekenler: curl, unzip, zip, sha256sum, npx (Node), go-winres (go install github.com/tc-hib/go-winres@latest)
 set -eu
 cd "$(dirname "$0")"
-rm -rf game dist && mkdir -p game dist
-cp ../index.html game/
-cp -r ../css ../js ../assets game/
-if command -v rsrc >/dev/null 2>&1 && [ -f icon.ico ]; then
-  rsrc -manifest app.manifest -ico icon.ico -arch amd64 -o rsrc_windows_amd64.syso
+EV=44.4.5
+CACHE=${CACHE:-.cache}
+OUT=dist/TheDeceiver
+mkdir -p "$CACHE"
+ZIP="$CACHE/electron-v$EV-win32-x64.zip"
+if [ ! -f "$ZIP" ]; then
+  curl -fsSL -o "$ZIP" "https://github.com/electron/electron/releases/download/v$EV/electron-v$EV-win32-x64.zip"
+  curl -fsSL -o "$CACHE/SHASUMS256-$EV.txt" "https://github.com/electron/electron/releases/download/v$EV/SHASUMS256.txt"
 fi
-GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -H=windowsgui" -o dist/TheDeceiver.exe .
-cp OKU.txt dist/
-(cd dist && zip -9 -q TheDeceiver.zip TheDeceiver.exe OKU.txt)
+WANT=$(grep " \*electron-v$EV-win32-x64.zip" "$CACHE/SHASUMS256-$EV.txt" | cut -d' ' -f1)
+echo "$WANT  $ZIP" | sha256sum -c -
+
+rm -rf dist && mkdir -p "$OUT"
+unzip -q "$ZIP" -d "$OUT"
+# Yalnızca Türkçe ve İngilizce dil dosyaları kalsın
+find "$OUT/locales" -type f ! -name 'tr.pak' ! -name 'en-US.pak' -delete
+rm -f "$OUT/resources/default_app.asar"
+
+# Uygulama + oyun dosyaları -> resources/app.asar
+STAGE=dist/stage
+mkdir -p "$STAGE/game"
+cp app/main.js app/preload.js app/package.json "$STAGE/"
+cp ../index.html "$STAGE/game/"
+cp -r ../css ../js ../assets "$STAGE/game/"
+npx --yes @electron/asar@3.2.17 pack "$STAGE" "$OUT/resources/app.asar"
+rm -rf "$STAGE"
+
+# Exe adı, simgesi ve sürüm bilgisi
+mv "$OUT/electron.exe" "$OUT/TheDeceiver.exe"
+go-winres patch --in winres.json --no-backup --authenticode remove "$OUT/TheDeceiver.exe"
+
+cp OKU.txt "$OUT/"
+(cd dist && zip -9 -q -r TheDeceiver.zip TheDeceiver)
 echo "Hazır: desktop/dist/TheDeceiver.zip"

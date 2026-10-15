@@ -235,6 +235,7 @@ G.enterMap = function (id, tx, ty, dir, instant) {
   if (id !== 'town') G.driving = false;
   G.npcSlot = -1;
   TRAFFIC.updateParked();
+  G.unstick();
   G.refreshNpcs(true);
   G.snapCam();
   if (!instant) { G.fade = 1; SFX.door(); }
@@ -464,6 +465,32 @@ G.blocked = function (body, x, y) {
   if (m.id === 'town' && (TRAFFIC.hit(x, y) || TRAFFIC.parkedHit(x, y))) return true;
   if (body !== G.player && Math.abs(G.player.x - x) < 10 && Math.abs(G.player.y - y) < 6) return true;
   return false;
+};
+
+// Jade kapalı bir yere doğduysa (eşya, park etmiş araba...) en yakın boş noktaya alınır.
+G.staticBlocked = function (x, y) {
+  const m = G.map;
+  const x0 = Math.floor((x - 5) / TS), x1 = Math.floor((x + 5) / TS);
+  const y0 = Math.floor((y - 5) / TS), y1 = Math.floor((y - 0.5) / TS);
+  for (let ty = y0; ty <= y1; ty++) for (let tx = x0; tx <= x1; tx++) if (WORLD.isSolid(m, tx, ty) || G.dynSolid(tx, ty)) return true;
+  return m.id === 'town' && TRAFFIC.parkedHit(x, y);
+};
+G.unstick = function () {
+  const p = G.player;
+  const free = (x, y) => !G.staticBlocked(x, y) && [[0, 1], [0, -1], [1, 0], [-1, 0]].some(([dx, dy]) => !G.staticBlocked(x + dx * 6, y + dy * 6));
+  if (free(p.x, p.y)) return;
+  const tx0 = Math.floor(p.x / TS), ty0 = Math.floor(p.y / TS);
+  for (let r = 1; r <= 8; r++) {
+    let best = null;
+    for (let ty = ty0 - r; ty <= ty0 + r; ty++) for (let tx = tx0 - r; tx <= tx0 + r; tx++) {
+      if (Math.max(Math.abs(tx - tx0), Math.abs(ty - ty0)) !== r) continue;
+      const x = tx * TS + 8, y = ty * TS + 12;
+      if (!free(x, y)) continue;
+      const d = Math.hypot(x - p.x, y - p.y);
+      if (!best || d < best.d) best = { x, y, d };
+    }
+    if (best) { p.x = best.x; p.y = best.y; return; }
+  }
 };
 
 G.dynSolid = function (tx, ty) {
