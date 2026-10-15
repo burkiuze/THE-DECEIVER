@@ -54,11 +54,19 @@ G.resize = function () {
 G.showTitle = function () {
   const t = document.getElementById('title');
   t.classList.remove('hidden');
-  const has = !!localStorage.getItem(G.saveKey);
+  let has = false;
+  try { has = !!localStorage.getItem(G.saveKey); } catch (e) { /* depolama kapalı */ }
   const btns = document.getElementById('title-btns');
   btns.innerHTML = '';
   if (has) btns.appendChild(U.h('button', { class: 'big', onclick: () => G.start(false) }, 'Devam Et'));
-  btns.appendChild(U.h('button', { class: 'big' + (has ? ' alt' : ''), onclick: () => { if (!has || confirm('Kayıtlı oyunun silinecek. Emin misin?')) G.start(true); } }, 'Yeni Oyun'));
+  const newBtn = U.h('button', { class: 'big' + (has ? ' alt' : '') }, 'Yeni Oyun');
+  newBtn.addEventListener('click', () => {
+    // Kayıt varsa sayfa içinde ikinci tıklamayla onay iste
+    if (!has || newBtn.dataset.confirm) return G.start(true);
+    newBtn.dataset.confirm = '1';
+    newBtn.textContent = 'Kayıt silinecek — onaylamak için tekrar tıkla';
+  });
+  btns.appendChild(newBtn);
   btns.appendChild(U.h('button', { class: 'big alt', onclick: G.howTo }, 'Nasıl Oynanır?'));
   const pc = document.getElementById('title-jade');
   ART.portrait(pc, DATA.CAST.jade.spec);
@@ -97,7 +105,7 @@ G.start = function (fresh) {
   if (!fresh) {
     try { G.state = JSON.parse(localStorage.getItem(G.saveKey)); } catch (e) { G.state = null; }
   }
-  const isNew = !G.state || fresh;
+  const isNew = !G.state || !G.state.case || fresh;
   if (isNew) {
     G.state = {
       day: 1, time: 8 * 60, money: 40, focus: 100, maxFocus: 100, rep: 0, solved: 0, failed: 0,
