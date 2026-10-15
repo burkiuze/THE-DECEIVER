@@ -1,0 +1,30 @@
+THE DECEIVER - Bir Jade Vakası (v2.1)
+======================================
+
+NASIL OYNANIR
+1) Zip'i bir klasöre çıkar (zip'in içinden doğrudan çalıştırma).
+2) TheDeceiver.exe'ye çift tıkla. Oyun kendi penceresinde açılır.
+3) Pencereyi kapatınca oyun da kapanır. İlerleme otomatik kaydedilir.
+
+"WINDOWS BİLGİSAYARINIZI KORUDU" UYARISI
+Oyun dijital olarak imzalı olmadığı için Windows SmartScreen uyarı verebilir.
+"Ek bilgi" > "Yine de çalıştır" ile açabilirsin.
+
+GEREKSİNİMLER
+- Windows 10 veya 11 (64 bit)
+- Microsoft Edge (Windows'ta zaten yüklüdür) ya da Google Chrome
+- İnternet gerekmez.
+
+KAYITLAR
+Kayıtların şu klasörde durur: %LOCALAPPDATA%\TheDeceiver
+Bu klasörü silersen kayıtlar ve ayarlar sıfırlanır.
+
+KONTROLLER
+WASD / Oklar : yürü, araba sür     Shift : koş / gaza bas
+E            : konuş, incele, arabaya bin/in
+Q            : Gözlem modu          F : Dava dosyası
+P            : Telefon (harita, yol tarifi, mesajlar, rehber)
+Esc          : Menü                 M : Ses aç/kapat
+
+Bilinen not: Bazı antivirüs programları imzasız oyunları ilk açılışta tarar;
+birkaç saniye beklemen gerekebilir.

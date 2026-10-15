@@ -290,7 +290,7 @@ TALK.briefing = async function (c) {
   await UI.say(who, 'Olay yerine git, cesedi ve ceplerini incele, Dr. Ortiz’le konuş, şüphelileri sorgula. Ve lütfen... kimseyi hipnotize etme.');
   await UI.say(G.cast('jade'), 'Söz veremem ama elimden geleni yaparım. Ki bu genelde fazlasıdır.');
   c.status = 'active';
-  c.deadline = st.day + 2;
+  c.deadline = st.day + DIFF().deadline;
   await UI.say(who, `${DATA.DAYS[(c.deadline - 1) % 7]} gece yarısına kadar vaktin var. Katili bulunca bana gel: katili, yöntemi ve motifi söyleyeceksin.`);
   const sc = st.scenes[c.sceneId];
   G.addEvidence(c.id, 'brief_' + c.id, 'Dava özeti', `Kurban ${POP.get(c.victim).name}. Olay yeri: ${G.place(sc.place).name}. Şüpheliler: ${c.suspects.map((s) => `${POP.get(s.pid).name} (${s.relation})`).join(', ')}.`, true);
@@ -372,6 +372,7 @@ TALK.kevin = async function () {
   const i = await UI.choose(who, 'Jade.', opts);
   if (opts[i].fr) return TALK.askAlibi(opts[i].fr, 'kevin', who);
   if (i !== 0) return;
+  if (!DIFF().hints) return UI.say(who, 'Bu sefer kendi başınasın, Jade. Şef ipucu vermemi yasakladı.');
   if (!nt) return UI.say(who, 'Şu an bekleyen bir iş yok. Kanepen seni çağırıyor.');
   await UI.say(who, `Ben olsam şuna bakardım: ${nt.t}. Yer: ${nt.where}.`);
   if (nt.hint) await UI.say(who, nt.hint);
@@ -570,7 +571,6 @@ TALK.openSafe = async function (sc) {
 // ============================================================ Mekân eylemleri
 TALK.useAct = async function (act, t) {
   const st = G.state;
-  if (act === 'car') return TALK.drive();
   if (act === 'couch') return TALK.couch();
   if (act === 'tea') {
     if (st.tea >= 2) return UI.say(G.cast('jade'), 'Bugün yeterince çay içtim. Hayır, aslında asla yeterli değil... ama demlik boş.');
@@ -663,6 +663,36 @@ TALK.dropSpot = async function (spot) {
   return UI.say(null, { booth: 'Eski, kırmızı bir telefon kulübesi. Ahize hâlâ çalışıyor.', crypt: 'Eski bir aile türbesi. Kapının kilidi yeni... tuhaf.', bench: 'Fenerin dibinde, denize bakan yalnız bir bank.' }[spot]);
 };
 
+TALK.carMenu = async function () {
+  const st = G.state;
+  const opts = ['Arabaya bin ve sür'];
+  if (st.wp) opts.push(`Otomatik git: ${st.wp.label} (15 dk)`);
+  opts.push('Otomatik git: yer seç (15 dk)', 'Vazgeç');
+  const i = await UI.choose(G.cast('jade'), 'Eski dostum. Ne yapıyoruz?', opts);
+  const o = opts[i];
+  if (o.startsWith('Arabaya')) {
+    G.driving = true; G.carSpeed = 0;
+    G.player.x = st.car.x; G.player.y = st.car.y + 6;
+    SFX.tone(90, 0.3, 'sawtooth', 0.04); SFX.tone(120, 0.3, 'sawtooth', 0.03, 0.2);
+    UI.toast('Sürüş: yön tuşları / joystick • Shift: hızlan • E: in');
+    return;
+  }
+  if (o.startsWith('Otomatik git: yer')) return TALK.drive();
+  if (o.startsWith('Otomatik git:')) return TALK.autoTo(st.wp.x, st.wp.y, null);
+};
+
+// Arabayla hedefe ışınlan: araba hedefe en yakın kaldırıma park eder
+TALK.autoTo = function (tx, ty, doorDir) {
+  G.advance(15);
+  const used = new Set();
+  for (const p of TRAFFIC.parked) { const px = Math.floor(p.x / TS), py = Math.floor(p.y / TS); for (let d = -1; d <= 1; d++) used.add((px + d) + ',' + py); }
+  const spot = TRAFFIC.curb(tx + 3, ty, used, 12) || TRAFFIC.curb(tx, ty + 1, used, 12);
+  if (spot) G.state.car = { x: spot.x, y: spot.y, dir: 3 };
+  G.driving = false;
+  G.enterMap('town', tx, ty, doorDir == null ? 0 : doorDir);
+  if (G.blocked(G.player, G.player.x, G.player.y)) { G.player.y += TS; }
+};
+
 TALK.drive = async function () {
   const st = G.state;
   const groups = [
@@ -672,7 +702,7 @@ TALK.drive = async function () {
     ['Evler (aileler)', null],
   ];
   const active = new Set(Object.values(st.scenes).filter((s) => !s.closed).map((s) => s.place));
-  const g = await UI.choose(G.cast('jade'), 'Eski dostum. Nereye? (15 dk)', groups.map((x) => x[0]).concat(['Vazgeç']));
+  const g = await UI.choose(G.cast('jade'), 'Nereye? (15 dk)', groups.map((x) => x[0]).concat(['Vazgeç']));
   if (g >= groups.length) return;
   let dest;
   if (groups[g][1]) {
@@ -688,12 +718,11 @@ TALK.drive = async function () {
     if (i >= list.length) return;
     dest = list[i].h.id;
   }
-  G.advance(15);
   const tm = WORLD.maps.town;
   const b = WORLD.building(dest);
-  if (b) return G.enterMap('town', b.door.x, b.door.y + 1, 1);
+  if (b) return TALK.autoTo(b.door.x, b.door.y + 1, 0);
   const zone = { park: tm.spots.parkCenter, cemetery: tm.spots.crypt, lighthouse: tm.spots.bench, docks: [85, 81] }[dest];
-  G.enterMap('town', zone[0], zone[1], 0);
+  TALK.autoTo(zone[0], zone[1], 0);
 };
 
 TALK.couch = async function () {
@@ -826,32 +855,34 @@ TALK.tasks = function () {
   for (const fr of s.frames) {
     if (fr.alibi || fr.analysis || fr.agentFound) continue;
     const v = POP.get(st.scenes[fr.sceneId].victim);
-    L.push({ t: `Tuzaktan kurtul (${v.first}): o saatte seni gören birini bul ya da sahte delili analiz et`, done: false, where: 'Herkes / Delil panosu', urgent: true, hint: 'Seni gören biri yoksa karakoldaki delil panosunda sahte delili incele.' });
+    L.push({ t: `Tuzaktan kurtul (${v.first}): o saatte seni gören birini bul ya da sahte delili analiz et`, done: false, where: 'Herkes / Delil panosu', place: 'station', urgent: true, hint: 'Seni gören biri yoksa karakoldaki delil panosunda sahte delili incele.' });
   }
   const c = G.curCase();
-  if (c && c.status === 'pending') L.push({ t: 'Şef Lena ile konuş: yeni bir dava var', done: false, where: 'Karakol' });
+  if (c && c.status === 'pending') L.push({ t: 'Şef Lena ile konuş: yeni bir dava var', done: false, where: 'Karakol', place: 'station' });
   if (c && c.status === 'active') {
     const sc = st.scenes[c.sceneId];
+    const sp = sc.map === 'town' ? { x: sc.body[0], y: sc.body[1] + 1 } : sc.place;
     const total = sc.clues.length, found = sc.clues.filter((cl) => sc.found[cl.id]).length;
     const searched = Object.keys(sc.searched).length;
-    L.push({ t: `Olay yerini incele (${found}/${total} ipucu)`, done: found === total, where: G.place(sc.place).short, hint: sc.clues.some((x) => x.hidden && !sc.found[x.id]) ? 'Bazı ipuçları yalnızca Gözlem (Q) ile görünür.' : null });
-    L.push({ t: 'Cesedin ceplerini ara', done: searched >= 3, where: G.place(sc.place).short, hint: 'Astar ya da yaka gibi yerlerde saklı eşyalar olabilir.' });
-    L.push({ t: `Tanıkla konuş: ${POP.get(c.witness.pid).name}`, done: !!c.k.witness, where: G.place(sc.place).short + ' önü' });
-    L.push({ t: 'Otopsi bulgularını Dr. Ortiz ile yorumla', done: sc.autopsy, where: 'Adli Tıp' });
+    L.push({ t: `Olay yerini incele (${found}/${total} ipucu)`, done: found === total, where: G.place(sc.place).short, place: sp, hint: sc.clues.some((x) => x.hidden && !sc.found[x.id]) ? 'Bazı ipuçları yalnızca Gözlem (Q) ile görünür.' : null });
+    L.push({ t: 'Cesedin ceplerini ara', done: searched >= 3, where: G.place(sc.place).short, place: sp, hint: 'Astar ya da yaka gibi yerlerde saklı eşyalar olabilir.' });
+    L.push({ t: `Tanıkla konuş: ${POP.get(c.witness.pid).name}`, done: !!c.k.witness, where: G.place(sc.place).short + ' önü', place: PHONE.locTarget(POP.where(POP.get(c.witness.pid), st.day, st.time)) });
+    L.push({ t: 'Otopsi bulgularını Dr. Ortiz ile yorumla', done: sc.autopsy, where: 'Adli Tıp', place: 'lab' });
     for (const s0 of c.suspects) {
       const ks = c.k.sus[s0.pid];
       const p = POP.get(s0.pid);
-      L.push({ t: `${p.name}: sorgula ve oku`, done: ks.motive && ks.alibi && ks.read, where: POP.placeName(POP.where(p, st.day, st.time)) });
+      const loc = POP.where(p, st.day, st.time);
+      L.push({ t: `${p.name}: sorgula ve oku`, done: ks.motive && ks.alibi && ks.read, where: POP.placeName(loc), place: PHONE.locTarget(loc), whereName: p.name });
     }
-    L.push({ t: 'Şüphelilerin geçmişini Grace’e tarat', done: c.suspects.every((x) => G.know(x.pid).bg), where: 'Karakol' });
+    L.push({ t: 'Şüphelilerin geçmişini Grace’e tarat', done: c.suspects.every((x) => G.know(x.pid).bg), where: 'Karakol', place: 'station' });
     const ver = c.suspects.filter((x) => x.alibi.place);
     L.push({ t: 'Mazeretleri tanıklara doğrulat', done: ver.every((x) => c.k.sus[x.pid].checked), where: 'Kafe / Otel / Bar' });
     if (c.feats.print && sc.found.print) L.push({ t: 'Kısmi parmak izini Sam ile karşılaştır', done: c.k.print, where: 'Adli Tıp' });
     if (c.feats.cipher && st.evidence.some((e) => e.title === 'Şifreli not' && e.caseId === c.id)) L.push({ t: 'Şifreli notu çöz', done: c.k.cipher, where: 'Delil panosu / Dosya' });
     if (c.feats.safe && sc.visited) L.push({ t: 'Kurbanın kasasını aç', done: c.k.safe, where: G.place(sc.place).short });
-    L.push({ t: 'Katili Şef Lena’ya bildir', done: false, where: 'Karakol' });
+    L.push({ t: 'Katili Şef Lena’ya bildir', done: false, where: 'Karakol', place: 'station' });
   }
-  for (const d of s.drops) if (!d.done) L.push({ t: `Ölü noktayı gözetle: ${d.label}`, done: false, where: `Gün ${d.day}, 21.30–22.30`, hint: 'Gizlenip bekle; gelen kişiyi Gözlem ile incele.' });
+  for (const d of s.drops) if (!d.done) L.push({ t: `Ölü noktayı gözetle: ${d.label}`, done: false, where: `Gün ${d.day}, 21.30–22.30`, place: d.spot, hint: 'Gizlenip bekle; gelen kişiyi Gözlem ile incele.' });
   if (st.serial && st.serial.status === 'active' && st.serial.kills) {
     for (const id of st.serial.scenes) {
       const sc = st.scenes[id];
@@ -860,7 +891,7 @@ TALK.tasks = function () {
       if (left) L.push({ t: `${st.serial.name}: ${POP.get(sc.victim).first} olay yeri (${left} iş kaldı)`, done: false, where: G.place(sc.place).short, hint: 'Tanıklar olay yerinin önünde bekliyor olabilir.' });
     }
   }
-  if (s.ch === 4 && s.finalDay > 0) L.push({ t: 'Aslan ile buluş: deniz feneri', done: false, where: `Gün ${s.finalDay}, 23.30–00.30` });
+  if (s.ch === 4 && s.finalDay > 0) L.push({ t: 'Aslan ile buluş: deniz feneri', done: false, where: `Gün ${s.finalDay}, 23.30–00.30`, place: 'lighthouse' });
   if (!L.length) L.push({ t: 'Kanepede uyu; yarın yeni dava gelecek', done: false, where: 'Karakol' });
   return L;
 };

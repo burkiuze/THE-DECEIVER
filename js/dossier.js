@@ -235,7 +235,11 @@ DOSSIER.tab_people = function (el) {
 DOSSIER.tab_tasks = function (el) {
   const list = TALK.tasks();
   const ul = H('ul', { class: 'tasks' });
-  for (const t of list) ul.appendChild(H('li', { class: (t.done ? 'done' : '') + (t.urgent ? ' urgent' : '') }, H('span', { class: 'box' }, t.done ? '✓' : ''), H('span', null, t.t), H('span', { class: 'where' }, t.where)));
+  for (const t of list) {
+    const li = H('li', { class: (t.done ? 'done' : '') + (t.urgent ? ' urgent' : '') }, H('span', { class: 'box' }, t.done ? '✓' : ''), H('span', null, t.t), H('span', { class: 'where' }, t.where));
+    if (!t.done && t.place) li.appendChild(H('button', { class: 'mini-btn', onclick: () => G.setWaypoint(t.whereName || t.where, t.place) }, '📍'));
+    ul.appendChild(li);
+  }
   el.appendChild(ul);
   const nt = list.find((t) => !t.done && t.hint);
   if (nt) el.appendChild(H('p', { class: 'muted' }, 'İpucu: ' + nt.hint));

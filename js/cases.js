@@ -64,6 +64,11 @@ function sceneTiles(place, r) {
 }
 
 CASES.attrClue = function (key, v) {
+  const cl = CASES.attrClue0(key, v);
+  if (cl && CASES.hiddenAll) cl.hidden = true;
+  return cl;
+};
+CASES.attrClue0 = function (key, v) {
   if (key === 'shoe') return { id: 'shoe', attr: 'shoe', title: 'Ayak izi', text: `Yerde çamurlu bir ayakkabı izi. Ölçtün: ${v} numara.` };
   if (key === 'smoke') return { id: 'smoke', attr: 'smoke', title: 'Sigara izmariti', text: `Kurban sigara içmezmiş. Yerdeki izmaritin markası: ${v}.` };
   if (key === 'hair') return { id: 'hair', attr: 'hair', hidden: true, title: 'Yabancı saç teli', text: `Kurbanın yakasında ona ait olmayan, ${v} bir saç teli.` };

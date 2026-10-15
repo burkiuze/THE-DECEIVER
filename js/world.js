@@ -286,26 +286,6 @@ WORLD.buildTown = function () {
   if (nb) { const x = nb.door.x - 2, y = nb.door.y + 1; if (!m.solid[idx(x, y)]) { solid(x, y); addObj('newsbox', ART.prop('newsbox'), x * TS + 2, y * TS - 4, (y + 1) * TS - 1); } }
   [[24, 29], [84, 45]].forEach(([x, y]) => { if (tile(x, y) !== 'sidewalk') return; solid(x, y); solid(x + 1, y); addObj('busstop', ART.prop('busstop'), x * TS - 1, y * TS - 20, (y + 1) * TS); });
 
-  // --- Jade'in arabası (karakolun önünde)
-  const st = WORLD.building('station');
-  const cx = st.x + 1, cy = st.y + st.h + 1;
-  set(cx, cy, 'parking'); set(cx + 1, cy, 'parking'); solid(cx, cy); solid(cx + 1, cy);
-  m.acts[cx + ',' + cy] = 'car'; m.acts[(cx + 1) + ',' + cy] = 'car';
-  addObj('car', ART.prop('jadecar'), cx * TS - 4, cy * TS - 10, (cy + 1) * TS, { jade: true });
-  // park etmiş arabalar
-  const carCols = ['#c0392b', '#2c3e66', '#e8e6df', '#3a6b4a', '#d9a03a', '#5a4a6b', '#2b2b30'];
-  let parked = 0;
-  for (let k = 0; k < 400 && parked < 14; k++) {
-    const hy = HROADS[r.int(0, 4)];
-    const x = r.int(5, 120), y = hy + 1;
-    if (tile(x, y) !== 'road' || tile(x + 1, y) !== 'road') continue;
-    if (VROADS.some((vx) => x >= vx - 4 && x <= vx + 5)) continue;
-    if (m.solid[idx(x, y)] || m.solid[idx(x + 1, y)]) continue;
-    solid(x, y); solid(x + 1, y);
-    addObj('car', ART.prop('car', carCols[parked % carCols.length]), x * TS - 2, y * TS - 8, (y + 1) * TS);
-    parked++;
-  }
-
   // --- zemin tuvali
   const [gc, gg] = ART.canvas(W * TS, H * TS);
   const gr = U.rng(777);

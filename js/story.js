@@ -92,9 +92,9 @@ STORY.night = function (st, newsOut) {
     st.scenes[res.scene.id] = res.scene;
     G.killPerson(res.victim.id);
     for (const w of res.scene.witnesses) G.overridePerson(w.pid, day, 8 * 60, 20 * 60, 'near:' + res.scene.place);
-    se.nextKill = day - 1 + (se.kills >= 3 ? 1 : 2);
+    se.nextKill = day - 1 + (se.kills >= 3 ? DIFF().serialGapLate : DIFF().serialGap);
     newsOut.push({ kind: 'serial', scene: res.scene.id });
-    if (se.kills >= 6) { se.status = 'escaped'; newsOut.push({ kind: 'serialEscaped' }); }
+    if (se.kills >= DIFF().maxKills) { se.status = 'escaped'; newsOut.push({ kind: 'serialEscaped' }); }
   }
   // Bea tuzağı
   if (s.ch >= 3 && !s.done && s.nextFrame != null && day - 1 >= s.nextFrame && s.members[s.bea] && !s.exposed[s.bea]) {
@@ -112,13 +112,13 @@ STORY.night = function (st, newsOut) {
       st.scenes[sc.id] = sc;
       G.killPerson(victimId);
       s.frames.push({ id: sc.caseId, sceneId: sc.id, fdef: fdef.id, day: day - 1, tod, agent, alibi: false, analysis: false, agentFound: false });
-      s.suspicion = Math.min(100, s.suspicion + 35);
-      s.nextFrame = day - 1 + 3;
+      s.suspicion = Math.min(100, s.suspicion + DIFF().frameSusp);
+      s.nextFrame = day - 1 + DIFF().frameGap;
       newsOut.push({ kind: 'frame', scene: sc.id });
     }
   }
   // şüphe zamanla azalır
-  if (s.suspicion > 0 && !newsOut.some((n) => n.kind === 'frame')) s.suspicion = Math.max(0, s.suspicion - 4);
+  if (s.suspicion > 0 && !newsOut.some((n) => n.kind === 'frame')) s.suspicion = Math.max(0, s.suspicion - DIFF().decay);
 };
 
 // ---------------------------------------------------------------- olaylar
@@ -158,6 +158,7 @@ STORY.scheduleDrop = function (handlerId, source) {
   const d = { id: 'drop' + s.drops.length, handler: handlerId, spot: spot.id, label: spot.label, day: st.day + 1, hour: 22, done: false, seen: false, source };
   s.drops.push(d);
   const msg = `“${DATA.NET.code}. Teslimat: ${spot.label}, ${DATA.DAYS[(d.day - 1) % 7]} saat 22.00. — ${STORY.codeOf(handlerId)}”`;
+  G.msg('Ajanın telefonu', msg.replace(/[“”]/g, ''), true);
   G.addEvidence('net', d.id, 'Ölü nokta mesajı', `${source} içinden çıkan mesaj: ${msg}`);
   UI.toast(`Ölü nokta: ${spot.label}, Gün ${d.day} saat 22.00`, 'good');
 };

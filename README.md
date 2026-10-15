@@ -9,7 +9,11 @@ rastgele üretilmiş** bir cinayet dosyası gelir. Görevin: olay yerine git, ip
 
 ## Nasıl çalıştırılır?
 
-Kurulum yok, derleme yok. `index.html` dosyasını tarayıcıda açman yeterli.
+**Windows:** `TheDeceiver.zip` içindeki `TheDeceiver.exe`’yi çalıştır. Oyun kendi penceresinde açılır
+(Edge/Chrome uygulama penceresi, internet gerekmez). Kayıtlar `%LOCALAPPDATA%\TheDeceiver` klasöründe durur.
+Exe’yi kendin üretmek için: `desktop/build.sh` (Go 1.22+ ve `zip` gerekir).
+
+**Tarayıcı:** Kurulum yok, derleme yok. `index.html` dosyasını tarayıcıda açman yeterli.
 
 İstersen yerel bir sunucuyla da açabilirsin:
 
@@ -18,22 +22,44 @@ python3 -m http.server 8000
 # tarayıcıda: http://localhost:8000
 ```
 
-İlerleme tarayıcının `localStorage` alanına otomatik kaydedilir (“Devam Et”).
+İlerleme otomatik kaydedilir; ana menüde **Kayıtlı Oyun → Devam Et** ile kaldığın yerden sürersin.
 
 ## Kontroller
 
 | Tuş | Ne yapar |
 | --- | --- |
-| WASD / Ok tuşları | Yürü (Shift ile koş) |
-| E / Boşluk / Enter | Konuş, incele, kullan, diyaloğu ilerlet |
+| WASD / Ok tuşları | Yürü (Shift ile koş) • Arabadayken sür (Shift ile gaz) |
+| E / Boşluk / Enter | Konuş, incele, kullan, arabaya bin/in, diyaloğu ilerlet |
 | Q | **Gözlem modu**: odak harcar, olay yerindeki gizli ipuçlarını gösterir |
 | F / Tab | Dava dosyası (Dava, Şüpheliler, Deliller, Görevler, Notlar, Harita, Kariyer) |
 | 1–9 | Diyalog seçeneği seç |
+| P | **Telefon**: harita ve yol tarifi, mesajlar, rehber |
+| Esc | Duraklat menüsü (kaydet, ayarlar, ana menü) |
 | M | Ses aç/kapat |
 
-Dokunmatik ekranlarda sol altta joystick, sağ altta **E / Q / F** düğmeleri çıkar.
+Dokunmatik ekranlarda sol altta joystick, sağ altta **E / Q / F / P** düğmeleri çıkar.
 
 ## Oynanış
+
+### Ana menü ve zorluk
+**Yeni Oyun / Kayıtlı Oyun / Ayarlar / Bizi Takip Et.** Yeni oyunda dört zorluk var:
+
+| Zorluk | Özet |
+| --- | --- |
+| **Kolay** | Saat yavaş akar, odak ucuz, davalara 4 gün, seri katil 3 gecede bir öldürür, Bea’nın tuzakları zayıf |
+| **Orta** | Dengeli oyun: 3 gün süre, seri katil 2 gecede bir sonra her gece, görev ipuçları açık |
+| **Zor** | Saat hızlı, odak pahalı, davalara 2 gün, Bea’nın tuzakları güçlü |
+| **The Deceiver** | Hiç görev ipucu yok, tüm izler gizli (Gözlem şart), seri katil her gece öldürür, 3. tutuklanmada oyun biter |
+
+Ayarlarda ses seviyesi, yazı hızı ve tam ekran bulunur.
+
+### Trafik, araba ve telefon
+- Sokaklarda sağdan akan trafik var: siviller, taksiler, kamyonetler, **devriye arabaları** (gece tepe lambaları yanar).
+  Karakolun önünde ve açık olay yerlerinde polis arabaları park hâlindedir.
+- **Jade’in Citroën’i** karakolun önünde durur. Yanına gidip **E** ile bin, kendin sür ya da **Otomatik git** ile
+  seçtiğin yere zaman atlayarak ulaş. Arabalara çarpmamaya dikkat.
+- **Telefon (P)**: şehir haritası, işaretlediğin hedefe **yön oku ve mesafe** (ekranın üstünde), Lena’dan ve
+  ağdan gelen mesajlar, rehber. Dava dosyasındaki görevlerin yanındaki 📍 ile hedefi tek tıkla işaretlersin.
 
 ### Şehir ve insanlar
 - **128x96 karoluk Sunset Koyu**: şehir merkezi, SSB Karakolu, FBI Saha Ofisi, Belediye, banka, kütüphane, kilise,
@@ -82,8 +108,13 @@ js/ui.js          Diyalog kutusu, seçimler, bildirimler, pencereler, şifreli h
 js/minigames.js   Ceset arama, parmak izi, şifre, kasa, veritabanı, kişi seçici, sahte delil analizi
 js/dossier.js     Dava dosyası sekmeleri (Seri Katil, Lion Lion, Kişiler dahil)
 js/talk.js        Tüm konuşmalar, sorgular, suçlamalar ve görev listesi
+js/traffic.js     Araç trafiği, park eden polis arabaları, Jade'in arabasını sürme
+js/menu.js        Ana menü, zorluk seviyeleri, ayarlar, duraklat menüsü, oyun sonu
 js/game.js        Oyun döngüsü, kamera, ışıklandırma, NPC simülasyonu, gün geçişi
+js/phone.js       Telefon: harita/GPS, yön oku, mesajlar, rehber
+assets/           Logo, simge ve Pixelify Sans yazı tipi (OFL)
+desktop/          Windows başlatıcısı (Go): oyunu exe'ye gömer, yerel pencerede açar
 ```
 
-Harici kütüphane yok; tek dış kaynak Google Fonts’tan “Pixelify Sans” yazı tipi (çevrimdışıyken yerine
-sistem yazı tipi kullanılır).
+Harici kütüphane yok; oyun tamamen çevrimdışı çalışır. “Pixelify Sans” yazı tipi `assets/fonts` içinde
+SIL Open Font License ile birlikte gelir.

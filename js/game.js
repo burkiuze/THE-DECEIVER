@@ -14,6 +14,7 @@ const CAST_AT = { station: ['boss', 'grace', 'kevin', 'ray'], lab: ['ortiz', 'sa
 
 // ============================================================ Başlatma
 G.init = function () {
+  G.startHeartbeat();
   G.canvas = document.getElementById('game');
   G.ctx = G.canvas.getContext('2d');
   G.lightC = document.createElement('canvas');
@@ -50,21 +51,8 @@ G.resize = function () {
 
 // ============================================================ Başlık
 G.showTitle = function () {
-  const t = document.getElementById('title');
-  t.classList.remove('hidden');
-  let has = false;
-  try { has = !!localStorage.getItem(G.saveKey); } catch (e) { /* depolama kapalı */ }
-  const btns = document.getElementById('title-btns');
-  btns.innerHTML = '';
-  if (has) btns.appendChild(U.h('button', { class: 'big', onclick: () => G.start(false) }, 'Devam Et'));
-  const nb = U.h('button', { class: 'big' + (has ? ' alt' : '') }, 'Yeni Oyun');
-  nb.addEventListener('click', () => {
-    if (!has || nb.dataset.confirm) return G.start(true);
-    nb.dataset.confirm = '1'; nb.textContent = 'Kayıt silinecek — onaylamak için tekrar tıkla';
-  });
-  btns.appendChild(nb);
-  btns.appendChild(U.h('button', { class: 'big alt', onclick: G.howTo }, 'Nasıl Oynanır?'));
   ART.portrait(document.getElementById('title-jade'), DATA.CAST.jade.spec);
+  MENU.show();
 };
 
 G.howTo = function () {
@@ -90,16 +78,22 @@ G.howTo = function () {
   });
 };
 
-G.start = function (fresh) {
+G.start = function (fresh, diff) {
   SFX.ensure();
   document.getElementById('title').classList.add('hidden');
   document.getElementById('hud').classList.remove('hidden');
+  G.driving = false; G.carSpeed = 0; UI.modals.slice().forEach((m) => m.close && m.close());
+  G.startHeartbeat();
   let loaded = null;
   if (!fresh) { try { loaded = JSON.parse(localStorage.getItem(G.saveKey)); } catch (e) { loaded = null; } }
   if (loaded && loaded.v === 2) {
     G.state = loaded;
+    G.state.diff = G.state.diff || 'normal';
+    G.state.car = G.state.car || TRAFFIC.defaultCar();
+    CASES.hiddenAll = DIFF().hiddenAll;
     POP.generate(G.state.seed);
     G.applyPopState();
+    TRAFFIC.init();
     G.enterMap(G.state.map, null, null, G.state.dir, true);
     G.player.x = G.state.px; G.player.y = G.state.py;
     G.snapCam();
@@ -109,12 +103,14 @@ G.start = function (fresh) {
   }
   const seed = (Date.now() % 1000000) + 17;
   G.state = {
-    v: 2, seed, day: 1, time: 8 * 60, money: 60, focus: 100, maxFocus: 100, rep: 0, solved: 0, failed: 0, tea: 0,
+    v: 2, diff: diff || 'normal', seed, day: 1, time: 8 * 60, money: DIFFS[diff || 'normal'].money, focus: 100, car: TRAFFIC.defaultCar(), msgs: [], maxFocus: 100, rep: 0, solved: 0, failed: 0, tea: 0,
     map: 'station', px: 0, py: 0, dir: 0, caseNum: 0, current: null, cases: {}, scenes: {}, serial: null,
     pop: {}, popFix: {}, know: {}, evidence: [], history: [], jlog: {}, talked: [], weather: 'clear',
   };
+  CASES.hiddenAll = DIFF().hiddenAll;
   POP.generate(seed);
   STORY.init(G.state);
+  TRAFFIC.init();
   G.newStandardCase();
   const sp = WORLD.INTERIORS.station.spawn;
   G.enterMap('station', sp[0], sp[1], 0, true);
@@ -126,7 +122,8 @@ G.intro = async function () {
   await UI.say(null, `${DATA.TOWN}, Kaliforniya. Nüfus: ${POP.people.length + 11}. SSB Karakolu. Sabah saat 08.00.`);
   await UI.say(G.cast('jade'), 'Bu kanepe kasabadaki en iyi düşünme yeri. Bir de en iyi uyuma yeri.');
   await UI.say(G.cast('boss'), 'JADE! Kanepeden kalk. Masamda yeni bir dosya var. Ofisime gel!');
-  await UI.say(null, 'İpucu: Şef Lena sağdaki ofiste. Yürü ve E ile konuş. Dava dosyası için F. Şehir büyük; karakolun önündeki arabanla her yere gidebilirsin.');
+  await UI.say(null, `Zorluk: ${DIFF().name}. İpucu: Şef Lena sağdaki ofiste; yürü ve E ile konuş. F: dava dosyası, P: telefon (harita, yol tarifi, rehber). Karakolun önündeki arabana E ile binip sürebilirsin.`);
+  G.msg('Lena', 'Neredesin? Masamda yeni bir dosya var. Ofisime gel.');
 };
 
 // ============================================================ Yardımcılar
@@ -179,6 +176,7 @@ G.addEvidence = function (caseId, id, title, text, silent) {
 
 G.advance = function (min) { G.state.time += min; };
 G.useFocus = function (n) {
+  n = Math.round(n * DIFF().focus);
   if (G.state.focus < n) { UI.toast('Odak yetersiz! Çay iç ya da biraz dinlen.', 'bad'); SFX.bad(); return false; }
   G.state.focus -= n; return true;
 };
@@ -234,7 +232,9 @@ G.enterMap = function (id, tx, ty, dir, instant) {
   G.revealed = false;
   if (tx != null) { G.player.x = tx * TS + 8; G.player.y = ty * TS + 12; }
   G.player.dir = dir || 0;
+  if (id !== 'town') G.driving = false;
   G.npcSlot = -1;
+  TRAFFIC.updateParked();
   G.refreshNpcs(true);
   G.snapCam();
   if (!instant) { G.fade = 1; SFX.door(); }
@@ -336,6 +336,8 @@ G.bindInput = function () {
     if (k === 'e' || k === 'E' || k === ' ' || k === 'Enter') G.interact();
     else if (k === 'q' || k === 'Q') G.observe();
     else if (k === 'f' || k === 'F' || k === 'Tab') DOSSIER.open();
+    else if (k === 'p' || k === 'P') PHONE.open();
+    else if (k === 'Escape') MENU.pause();
   });
   window.addEventListener('keyup', (e) => { G.keys[e.key.toLowerCase()] = false; });
   window.addEventListener('blur', () => { G.keys = {}; });
@@ -359,6 +361,7 @@ G.bindInput = function () {
   btn('tb-e', () => { if (!UI.key('e')) G.interact(); });
   btn('tb-q', () => { if (!UI.busy()) G.observe(); });
   btn('tb-f', () => { if (!UI.busy()) DOSSIER.open(); });
+  btn('tb-p', () => { if (!UI.busy()) PHONE.open(); });
   if ('ontouchstart' in window || navigator.maxTouchPoints > 0) document.body.classList.add('touch');
 };
 
@@ -378,6 +381,7 @@ G.loop = function (ts) {
 };
 
 G.animOnly = function (dt) {
+  if (!G.scripting) TRAFFIC.update(dt);
   for (const n of G.npcs) { n.blinkT -= dt; if (n.blinkT < -0.15) n.blinkT = 2 + Math.random() * 4; }
   if (G.fade > 0) G.fade = Math.max(0, G.fade - dt * 3);
   if (G.observeFx > 0) G.observeFx = Math.max(0, G.observeFx - dt);
@@ -387,7 +391,7 @@ G.animOnly = function (dt) {
 G.update = function (dt) {
   const st = G.state;
   const before = st.time;
-  st.time += dt * MIN_PER_SEC;
+  st.time += dt * MIN_PER_SEC * DIFF().clock;
   if (Math.floor(before / 10) !== Math.floor(st.time / 10)) G.logJade();
   if (st.time >= 26 * 60) { G.runScript(() => G.newDay(true)); return; }
   let mx = 0, my = 0;
@@ -398,6 +402,19 @@ G.update = function (dt) {
   if (K.s || K.arrowdown) my += 1;
   if (!mx && !my) { mx = G.touch.x; my = G.touch.y; }
   const p = G.player;
+  TRAFFIC.update(dt);
+  if (G.driving) {
+    TRAFFIC.drive(dt, mx, my, K.shift);
+    p.moving = false;
+    for (const n of G.npcs) { if (n.wander) G.updateWalker(n, dt); n.blinkT -= dt; if (n.blinkT < -0.15) n.blinkT = 2 + Math.random() * 4; }
+    G.refreshNpcs(false);
+    G.checkSceneArrival();
+    G.followCam(dt);
+    if (G.fade > 0) G.fade = Math.max(0, G.fade - dt * 3);
+    G.updateFx(dt);
+    STORY.checkDrops(); STORY.checkFinal();
+    return;
+  }
   const len = Math.hypot(mx, my);
   p.moving = len > 0.2;
   if (p.moving) {
@@ -443,6 +460,7 @@ G.blocked = function (body, x, y) {
     if (n === body) continue;
     if (Math.abs(n.x - x) < 10 && Math.abs(n.y - y) < 6) return true;
   }
+  if (m.id === 'town' && (TRAFFIC.hit(x, y) || TRAFFIC.parkedHit(x, y))) return true;
   if (body !== G.player && Math.abs(G.player.x - x) < 10 && Math.abs(G.player.y - y) < 6) return true;
   return false;
 };
@@ -598,10 +616,12 @@ G.render = function () {
     list.push(o);
   }
   for (const n of G.npcs) list.push({ base: n.y, npc: n });
-  list.push({ base: G.player.y, npc: Object.assign({ spec: DATA.CAST.jade.spec, blinkT: (G.t % 5) < 0.12 ? -0.1 : 1 }, G.player) });
+  if (!G.driving) list.push({ base: G.player.y, npc: Object.assign({ spec: DATA.CAST.jade.spec, blinkT: (G.t % 5) < 0.12 ? -0.1 : 1 }, G.player) });
+  if (m.id === 'town') TRAFFIC.drawList(list, vx0, vy0, vx1, vy1);
   list.sort((a, b) => a.base - b.base);
   for (const o of list) {
-    if (o.npc) G.drawChar(ctx, o.npc);
+    if (o.car) TRAFFIC.drawCar(ctx, o.car);
+    else if (o.npc) G.drawChar(ctx, o.npc);
     else if (o.bob) ctx.drawImage(o.img, Math.round(o.x), Math.round(o.y + Math.sin(G.t * 1.5 + o.x) * 1.2));
     else if (o.kind === 'tree' && G.state.weather !== 'clear') ctx.drawImage(o.img, Math.round(o.x + Math.sin(G.t * 2 + o.x * 0.1)), Math.round(o.y));
     else ctx.drawImage(o.img, Math.round(o.x), Math.round(o.y));
@@ -622,7 +642,8 @@ G.render = function () {
     ctx.fillStyle = '#2b1d1a'; ctx.fillRect(n.x - 2, by - 1, 5, 9);
     ctx.fillStyle = '#ffd25a'; ctx.fillRect(n.x - 1, by, 3, 5); ctx.fillRect(n.x - 1, by + 6, 3, 1);
   }
-  const tgt = G.findTarget();
+  G.drawNav(ctx);
+  const tgt = G.driving ? null : G.findTarget();
   if (tgt && !UI.busy()) {
     const bx = Math.round(tgt.px) - 6, by = Math.round(tgt.py) - 8 + Math.round(Math.sin(G.t * 5));
     ctx.fillStyle = '#2b1d1a'; ctx.fillRect(bx - 1, by - 1, 14, 12);
@@ -689,6 +710,7 @@ G.renderLight = function () {
   L.globalCompositeOperation = 'destination-out';
   const night = G.state.time / 60 >= 18;
   const lights = night ? G.map.lights.slice() : [];
+  if (night && G.map.kind === 'town') TRAFFIC.lights(lights);
   lights.push({ x: G.player.x, y: G.player.y - 12, r: G.map.secretOf ? 50 : 36 });
   if (G.map.secretOf) lights.push({ x: G.map.w * TS / 2, y: 3 * TS, r: 70 });
   for (const l of lights) {
@@ -725,8 +747,10 @@ G.updateHud = function () {
   UI.setHud('h-focus-txt', `${Math.round(st.focus)}/${st.maxFocus}`);
   const c = G.curCase();
   UI.setHud('hc-title', c && c.status !== 'closed' ? `Dava #${c.num}: ${c.title}` : 'Açık dava yok');
-  const nt = TALK.nextTask();
-  UI.setHud('hc-task', nt ? `▸ ${nt.t} (${nt.where})` : '');
+  const nt = DIFF().hints ? TALK.nextTask() : null;
+  UI.setHud('hc-task', nt ? `▸ ${nt.t} (${nt.where})` : (DIFF().hints ? '' : 'THE DECEIVER: ipucu yok'));
+  const unread = (st.msgs || []).filter((x) => !x.read).length;
+  UI.setHud('h-phone', unread ? `Telefon (${unread})` : 'Telefon (P)');
   UI.setHud('hc-dead', c && c.status === 'active' ? `Süre: ${DATA.DAYS[(c.deadline - 1) % 7]} gece yarısı (Gün ${c.deadline})` : '');
   const s = st.story;
   const extra = [];
@@ -774,11 +798,14 @@ G.findTarget = function () {
   }
   const act = G.map.acts[ftx + ',' + fty];
   if (act) return { kind: 'act', act, px: ftx * TS + 8, py: fty * TS - 4, tx: ftx, ty: fty };
+  const jc = G.state.car;
+  if (G.map.id === 'town' && jc && Math.hypot(jc.x - fx, jc.y - fy) < 24) return { kind: 'car', px: jc.x, py: jc.y - 26 };
   return null;
 };
 
 G.interact = function () {
   if (UI.busy() || G.scripting) return;
+  if (G.driving) { if (G.carSpeed > 20) { UI.toast('Önce dur (tuşu bırak).'); return; } TRAFFIC.exitCar(); return; }
   const t = G.findTarget();
   if (!t) return;
   G.runScript(async () => {
@@ -791,6 +818,7 @@ G.interact = function () {
     else if (t.kind === 'body') await TALK.searchBody(t.sc);
     else if (t.kind === 'safe') await TALK.openSafe(t.sc);
     else if (t.kind === 'act') await TALK.useAct(t.act, t);
+    else if (t.kind === 'car') await TALK.carMenu();
   });
 };
 
@@ -844,6 +872,10 @@ G.newDay = async function (fainted) {
   await UI.say(null, fainted
     ? `Jade gece yorgunluktan bayıldı. Ray onu karakoldaki kanepeye taşıdı (−$15). Gün ${st.day} • ${G.dayName()}.`
     : `Jade kanepesinde derin bir uykuya dalıyor... Gün ${st.day} • ${G.dayName()}, sabah 08.00.${st.weather === 'rain' ? ' Dışarıda yağmur var.' : ''}`);
+  if (arrested && DIFF().arrestLimit && s.arrests >= DIFF().arrestLimit) {
+    await MENU.gameOver('YELLOW BEA KAZANDI', `Jade üçüncü kez tutuklandı ve bu sefer kimse kefaletini ödeyemedi. Yellow Bea’nın kurduğu tuzak kusursuzdu. (${DIFF().name} zorluğu)`);
+    return;
+  }
   if (arrested) {
     await UI.interlude([['Yellow Bea', 'Aslan', 'Lion Lion. Danışman hücrede. Söylemiştim.'], ['Aslan', 'Yellow Bea', 'Lion Lion. Bir gün. Avukatları onu yarın çıkarır. Yeterince zaman kazandık.']]);
     await UI.say(G.cast('boss'), 'Jade... Seni bir gün nezarethanede tuttular. FBI İç İşler elindeki delillerle seni suçladı. Kefaletini ben ödedim (−$40, İtibar −3). Biri seni çok profesyonelce tuzağa düşürüyor. Adını temize çıkar!');
@@ -863,6 +895,7 @@ G.newDay = async function (fainted) {
     if (n.kind === 'serial') {
       const v = POP.get(sc.victim);
       SFX.bad();
+      G.msg('Lena', `${st.serial.name} yine vurdu: ${v.name}. Yer: ${G.place(sc.place).name}.`, true);
       await UI.say(G.cast('boss'), `Jade, kötü haber. ${st.serial.name} yine vurdu. Kurban: ${v.name} (${v.job}). Yer: ${G.place(sc.place).name}. Bu ${st.serial.kills}. kurban.`);
       G.addEvidence('serial', 'sk_' + sc.id, `${st.serial.kills}. kurban: ${v.name}`, `${v.name} (${v.age}, ${v.job}) — ${G.place(sc.place).name}. Ölüm gece ${U.hm(sc.tod % 24)} civarı.`, true);
       if (st.serial.kills === 2) G.addEvidence('serial', 'sk_pattern', 'Kurbanlar arasındaki ortak nokta', st.serial.pattern.text);
@@ -878,6 +911,7 @@ G.newDay = async function (fainted) {
       const fr = s.frames[s.frames.length - 1];
       const fdef = DATA.FRAMES.find((f) => f.id === fr.fdef);
       SFX.bad();
+      G.msg('Bilinmeyen numara', 'Uykun güzel miydi, danışman? Bu sabah herkes senden bahsediyor. — Y.B.', true);
       if (!s.seen.frame) await STORY.interlude('frame', { B: STORY.codeOf(s.members[fr.agent].boss) });
       await UI.say(G.cast('boss'), `Jade... ${v.name} dün gece öldürüldü: ${G.place(sc.place).name}. Olay yerinde seni gösteren bir şey var: ${fdef.title.toLowerCase()}. FBI İç İşler seni sorgulamak istiyor. (Şüphe: ${s.suspicion}/100)`);
       await UI.say(G.cast('jade'), `Ölüm saati ${U.hm(fr.tod % 24)} civarı. O saatte beni gören birini bulmalıyım. Ya da bu sahte delili çürütmeliyim.`);
@@ -890,12 +924,20 @@ G.newDay = async function (fainted) {
     if (agentNext) G.newStandardCase({ agent: STORY.agents()[0] });
     else if (ag2 && U.hrand(st.seed, st.day, 'n2') < 0.5) { G.newStandardCase({ agent: ag2 }); s.flags.net2 = true; }
     else G.newStandardCase();
-    if (G.curCase() && G.curCase().status === 'pending') await UI.say(G.cast('boss'), 'Bir de masamda yeni bir dosya var. Ofisime gel.');
+    if (G.curCase() && G.curCase().status === 'pending') { G.msg('Lena', 'Masamda yeni bir dosya var. Ofisime gel.', true); await UI.say(G.cast('boss'), 'Bir de masamda yeni bir dosya var. Ofisime gel.'); }
   }
   G.npcs = G.npcsFor(G.map.id);
   G.save();
 };
 
 G.closeScene = function (id) { const sc = G.state.scenes[id]; if (sc) sc.closed = true; };
+
+// Masaüstü sürümünde (.exe) yerel sunucuya “hâlâ açığım” sinyali
+G.startHeartbeat = function () {
+  if (G.hb || !/^(127\.0\.0\.1|localhost)$/.test(location.hostname)) return;
+  const ping = () => fetch('/__ping', { cache: 'no-store' }).catch(() => {});
+  ping();
+  G.hb = setInterval(ping, 4000);
+};
 
 window.addEventListener('load', G.init);

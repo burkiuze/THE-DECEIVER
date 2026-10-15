@@ -17,7 +17,7 @@ const SFX = {
     const t = c.currentTime + (delay || 0);
     const o = c.createOscillator(), g = c.createGain();
     o.type = type || 'square'; o.frequency.setValueAtTime(freq, t);
-    g.gain.setValueAtTime(vol || 0.04, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    g.gain.setValueAtTime(Math.max(0.0002, (vol || 0.04) * (typeof SETTINGS !== 'undefined' ? SETTINGS.volume : 1)), t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
     o.connect(g); g.connect(c.destination); o.start(t); o.stop(t + dur + 0.02);
   },
   blip() { this.tone(520 + Math.random() * 80, 0.04, 'square', 0.015); },
@@ -89,7 +89,9 @@ UI.renderDlg = function () {
 UI.tick = function (t) {
   const d = UI.dlg;
   if (d && d.shown < d.text.length) {
-    d.acc += 1.6;
+    const sp = typeof SETTINGS !== 'undefined' ? SETTINGS.textSpeed : 'normal';
+    if (sp === 'instant') { d.shown = d.text.length; UI.renderDlg(); }
+    d.acc += { slow: 0.8, normal: 1.6, fast: 3.4 }[sp] || 1.6;
     const n = Math.floor(d.acc);
     if (n > 0) {
       d.acc -= n;
@@ -123,7 +125,7 @@ UI.key = function (k) {
   if (UI.modals.length) {
     const top = UI.modals[UI.modals.length - 1];
     if (top.onKey && top.onKey(k)) return true;
-    if (k === 'Escape' && top.closable !== false) { top.close(); return true; }
+    if (k === 'Escape' && top.closable !== false && top.close) { top.close(); return true; }
     return true;
   }
   const d = UI.dlg;

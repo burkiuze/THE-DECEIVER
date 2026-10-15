@@ -5,10 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>The Deceiver</title>
 <meta name="description" content="Jade ile kasabanın gizemli cinayetlerini çöz: 2D piksel dedektif oyunu.">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css">
+<link rel="icon" href="assets/icon.png">
 </head>
 <body>
 <canvas id="game"></canvas>
@@ -24,9 +22,10 @@
     <div class="row"><span id="h-day"></span><span id="h-time" class="clock"></span></div>
     <div class="row"><span class="lbl">Odak</span><div class="fbar"><div id="h-focus"></div></div><span id="h-focus-txt" class="small"></span></div>
     <div class="row hidden" id="h-sus-row"><span class="lbl sus">Şüphe</span><div class="fbar sus"><div id="h-sus"></div></div><span id="h-sus-txt" class="small"></span></div>
-    <div class="row"><span id="h-money" class="money"></span><button id="h-file" class="mini-btn" onclick="DOSSIER.open()">Dosya (F)</button></div>
+    <div class="row"><span id="h-money" class="money"></span><span class="hbtns"><button id="h-phone" class="mini-btn" onclick="PHONE.open()">Telefon (P)</button><button id="h-file" class="mini-btn" onclick="DOSSIER.open()">Dosya (F)</button></span></div>
   </div>
-  <div id="hud-keys">WASD: yürü • Shift: koş • E: konuş/incele • Q: Gözlem • F: Dosya</div>
+  <div id="nav" class="hidden"><span id="nav-arrow">▲</span><span id="nav-label"></span><span id="nav-dist"></span></div>
+  <div id="hud-keys">WASD: yürü • Shift: koş • E: konuş/incele/arabaya bin • Q: Gözlem • F: Dosya • P: Telefon • Esc: Menü</div>
 </div>
 
 <div id="toasts"></div>
@@ -46,6 +45,7 @@
 <div id="touch">
   <div id="dpad"><div id="dknob"></div></div>
   <div id="tbtns">
+    <button id="tb-p">P</button>
     <button id="tb-f">F</button>
     <button id="tb-q">Q</button>
     <button id="tb-e">E</button>
@@ -53,14 +53,14 @@
 </div>
 
 <div id="title" class="hidden">
-  <div class="title-box panel">
-    <canvas id="title-jade" width="126" height="126"></canvas>
-    <h1>THE DECEIVER</h1>
-    <div class="sub">Bir Jade Vakası</div>
-    <p class="tag">Sunset Koyu’nda herkes yalan söyler. Jade hepsini okur.<br>Ama birileri de Jade’i okuyor: <b>Lion Lion.</b></p>
-    <div id="title-btns"></div>
-    <p class="foot">Klavye veya dokunmatik ekranla oynanır. İlerleme tarayıcına otomatik kaydedilir.</p>
+  <canvas id="menu-fx"></canvas>
+  <div class="menu">
+    <img id="menu-logo" src="assets/logo.png" alt="The Deceiver">
+    <div class="menu-sub">Bir Jade Vakası</div>
+    <div id="menu-panel" class="menu-panel"></div>
   </div>
+  <canvas id="title-jade" width="8" height="8" hidden></canvas>
+  <div class="menu-foot">Sunset Koyu’nda herkes yalan söyler • v2.1</div>
 </div>
 
 <script src="js/util.js"></script>
@@ -74,6 +74,9 @@
 <script src="js/minigames.js"></script>
 <script src="js/dossier.js"></script>
 <script src="js/talk.js"></script>
+<script src="js/traffic.js"></script>
+<script src="js/menu.js"></script>
 <script src="js/game.js"></script>
+<script src="js/phone.js"></script>
 </body>
 </html>
