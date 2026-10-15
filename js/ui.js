@@ -189,3 +189,40 @@ UI.setHud = function (id, val, prop) {
   if (prop === 'width') el.style.width = val;
   else el.textContent = val;
 };
+
+// ---------------------------------------------------------------- Ara sahne (şifreli hat)
+// lines: [[gönderen, alıcı, metin], ...]
+UI.interlude = function (lines) {
+  return new Promise((resolve) => {
+    const wrap = U.h('div', { class: 'interlude' });
+    const phone = U.h('div', { class: 'phone' });
+    const head = U.h('div', { class: 'ph-head' }, U.h('span', { class: 'lock' }, '●'), ' ŞİFRELİ HAT — ', U.h('b', null, 'LION LION'));
+    const body = U.h('div', { class: 'ph-body' });
+    const hint = U.h('div', { class: 'ph-hint' }, 'Devam: tıkla / E');
+    phone.append(head, body, hint);
+    wrap.appendChild(phone);
+    document.body.appendChild(wrap);
+    let i = 0, typing = null;
+    const m = { closable: false, onKey: (k) => { if (['e', 'E', ' ', 'Enter'].includes(k)) next(); return true; }, close() {} };
+    UI.modals.push(m);
+    const finish = () => { wrap.remove(); UI.modals.splice(UI.modals.indexOf(m), 1); resolve(); };
+    const next = () => {
+      if (typing) { typing.done(); return; }
+      if (i >= lines.length) { finish(); return; }
+      const [a, b, t] = lines[i++];
+      const left = i % 2 === 1;
+      const bubble = U.h('div', { class: 'msg ' + (left ? 'l' : 'r') }, U.h('div', { class: 'who' }, `${a} → ${b}`));
+      const txt = U.h('div', { class: 'txt' });
+      bubble.appendChild(txt);
+      body.appendChild(bubble);
+      body.scrollTop = body.scrollHeight;
+      let n = 0;
+      const iv = setInterval(() => { n += 2; txt.textContent = t.slice(0, n); if (n % 6 === 0) SFX.tone(900, 0.02, 'square', 0.01); if (n >= t.length) stop(); }, 22);
+      const stop = () => { clearInterval(iv); txt.textContent = t; typing = null; body.scrollTop = body.scrollHeight; };
+      typing = { done: stop };
+    };
+    wrap.addEventListener('click', next);
+    SFX.tone(220, 0.3, 'sine', 0.05); SFX.tone(330, 0.3, 'sine', 0.04, 0.3);
+    next();
+  });
+};

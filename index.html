@@ -18,10 +18,12 @@
     <div id="hc-title"></div>
     <div id="hc-task"></div>
     <div id="hc-dead"></div>
+    <div id="hc-extra"></div>
   </div>
   <div id="hud-stats" class="panel slim">
     <div class="row"><span id="h-day"></span><span id="h-time" class="clock"></span></div>
     <div class="row"><span class="lbl">Odak</span><div class="fbar"><div id="h-focus"></div></div><span id="h-focus-txt" class="small"></span></div>
+    <div class="row hidden" id="h-sus-row"><span class="lbl sus">Şüphe</span><div class="fbar sus"><div id="h-sus"></div></div><span id="h-sus-txt" class="small"></span></div>
     <div class="row"><span id="h-money" class="money"></span><button id="h-file" class="mini-btn" onclick="DOSSIER.open()">Dosya (F)</button></div>
   </div>
   <div id="hud-keys">WASD: yürü • Shift: koş • E: konuş/incele • Q: Gözlem • F: Dosya</div>
@@ -55,7 +57,7 @@
     <canvas id="title-jade" width="126" height="126"></canvas>
     <h1>THE DECEIVER</h1>
     <div class="sub">Bir Jade Vakası</div>
-    <p class="tag">Sunset Koyu’nda herkes yalan söyler. Jade hepsini okur.</p>
+    <p class="tag">Sunset Koyu’nda herkes yalan söyler. Jade hepsini okur.<br>Ama birileri de Jade’i okuyor: <b>Lion Lion.</b></p>
     <div id="title-btns"></div>
     <p class="foot">Klavye veya dokunmatik ekranla oynanır. İlerleme tarayıcına otomatik kaydedilir.</p>
   </div>
@@ -65,10 +67,13 @@
 <script src="js/data.js"></script>
 <script src="js/art.js"></script>
 <script src="js/world.js"></script>
-<script src="js/casegen.js"></script>
+<script src="js/pop.js"></script>
+<script src="js/cases.js"></script>
 <script src="js/ui.js"></script>
+<script src="js/story.js"></script>
 <script src="js/minigames.js"></script>
 <script src="js/dossier.js"></script>
+<script src="js/talk.js"></script>
 <script src="js/game.js"></script>
 </body>
 </html>

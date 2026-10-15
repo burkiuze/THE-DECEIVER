@@ -67,3 +67,24 @@ U.h = function (tag, props, ...kids) {
 };
 
 U.sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// Deterministik karma: aynı girdiler her zaman aynı 32-bit sayıyı verir (programlar, olaylar için).
+U.hash = function (...nums) {
+  let h = 2166136261 >>> 0;
+  for (const n of nums) {
+    const s = typeof n === 'string' ? n : String(n);
+    for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; }
+    h ^= 0x9e3779b9; h = Math.imul(h, 2246822507) >>> 0;
+  }
+  h ^= h >>> 13; h = Math.imul(h, 3266489909) >>> 0; h ^= h >>> 16;
+  return h >>> 0;
+};
+U.hrand = (...nums) => U.hash(...nums) / 4294967296;
+U.hpick = (arr, ...nums) => arr[U.hash(...nums) % arr.length];
+U.weighted = function (pairs, r) {
+  let tot = 0;
+  for (const [, w] of pairs) tot += w;
+  let x = r * tot;
+  for (const [v, w] of pairs) { if ((x -= w) < 0) return v; }
+  return pairs[pairs.length - 1][0];
+};

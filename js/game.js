@@ -1,24 +1,16 @@
 'use strict';
-// Ana oyun: durum, döngü, girdi, çizim, etkileşimler ve dava akışı.
+// Oyun motoru: durum, döngü, girdi, kamera, çizim, NPC simülasyonu, gün geçişi.
 
 const G = {
   state: null, map: null, npcs: [], keys: {}, touch: { x: 0, y: 0 },
   player: { x: 0, y: 0, dir: 0, moving: false, anim: 0 },
   cam: { x: 0, y: 0 }, S: 3, dpr: 1, t: 0, fade: 0, revealed: false, observeFx: 0,
-  running: false, saveKey: 'the-deceiver-save-v1',
+  running: false, saveKey: 'the-deceiver-save-v2', fx: [], birds: [],
 };
 
-const MIN_PER_SEC = 10 / 6; // 6 gerçek saniyede 10 oyun dakikası
-const SPEED = 72, RUN = 112;
-
-const CONFESS = {
-  miras: 'Bana hiçbir şey bırakmayacaktı! Hayatım boyunca onun kaprislerine katlandım, karşılığında hiçbir şey!',
-  kiskanclik: 'Beni bir kenara atıp gülerek yoluna devam edecekti. Buna izin veremezdim... Veremezdim.',
-  borc: 'Beni mahvedecekti. Her şeyimi, evimi, ailemi... Sadece biraz zaman istemiştim!',
-  santaj: 'Yıllardır beni sağıyordu. Bir gece daha onun sesini telefonda duyamazdım.',
-  intikam: 'Hayatımı o mahvetti. Ben sadece... hesabı kapattım.',
-  rekabet: 'Her şeyi o aldı benden: müşterilerimi, itibarımı. Bu sefer kazanan ben olacaktım.',
-};
+const MIN_PER_SEC = 10 / 7;
+const SPEED = 74, RUN = 118;
+const CAST_AT = { station: ['boss', 'grace', 'kevin', 'ray'], lab: ['ortiz', 'sam'], cafe: ['mia'], hotel: ['hector'], bar: ['lou'] };
 
 // ============================================================ Başlatma
 G.init = function () {
@@ -28,10 +20,8 @@ G.init = function () {
   G.lightG = G.lightC.getContext('2d');
   UI.init();
   WORLD.init();
-  G.sparkFrames = [0, 1, 2, 3].map((k) => ART.sparkle(k / 6 + 0.01, false));
-  G.sparkFramesH = [0, 1, 2, 3].map((k) => ART.sparkle(k / 6 + 0.01, true));
-  G.chalk = ART.chalk();
-  G.safeImg = (() => { const [c, g] = ART.canvas(16, 26); ART.FURN.safe.draw((x, y, w, h, col) => { g.fillStyle = col; g.fillRect(x, y + 8, w, h); }); return c; })();
+  G.spark = [0, 1, 2, 3].map((k) => makeSpark(k, '#fff6b0'));
+  G.sparkH = [0, 1, 2, 3].map((k) => makeSpark(k, '#c9a6ff'));
   window.addEventListener('resize', G.resize);
   G.resize();
   G.bindInput();
@@ -39,18 +29,26 @@ G.init = function () {
   requestAnimationFrame(G.loop);
 };
 
+function makeSpark(k, col) {
+  const [c, g] = ART.canvas(16, 16);
+  const s = [3, 5, 6, 5][k];
+  g.fillStyle = col; g.fillRect(8 - s, 7, s * 2, 2); g.fillRect(7, 8 - s, 2, s * 2);
+  g.fillStyle = '#fff'; g.fillRect(7, 7, 2, 2);
+  return c;
+}
+
 G.resize = function () {
   G.dpr = Math.min(2, window.devicePixelRatio || 1);
   const w = window.innerWidth, h = window.innerHeight;
   G.canvas.width = Math.floor(w * G.dpr); G.canvas.height = Math.floor(h * G.dpr);
   G.canvas.style.width = w + 'px'; G.canvas.style.height = h + 'px';
-  const base = Math.max(2, Math.floor(Math.min(w / (16 * 24), h / (16 * 14))));
+  const base = Math.max(2, Math.floor(Math.min(w / (16 * 26), h / (16 * 15))));
   G.S = base * G.dpr;
   G.lightC.width = G.canvas.width; G.lightC.height = G.canvas.height;
   G.ctx.imageSmoothingEnabled = false;
 };
 
-// ============================================================ Başlık ekranı
+// ============================================================ Başlık
 G.showTitle = function () {
   const t = document.getElementById('title');
   t.classList.remove('hidden');
@@ -59,17 +57,14 @@ G.showTitle = function () {
   const btns = document.getElementById('title-btns');
   btns.innerHTML = '';
   if (has) btns.appendChild(U.h('button', { class: 'big', onclick: () => G.start(false) }, 'Devam Et'));
-  const newBtn = U.h('button', { class: 'big' + (has ? ' alt' : '') }, 'Yeni Oyun');
-  newBtn.addEventListener('click', () => {
-    // Kayıt varsa sayfa içinde ikinci tıklamayla onay iste
-    if (!has || newBtn.dataset.confirm) return G.start(true);
-    newBtn.dataset.confirm = '1';
-    newBtn.textContent = 'Kayıt silinecek — onaylamak için tekrar tıkla';
+  const nb = U.h('button', { class: 'big' + (has ? ' alt' : '') }, 'Yeni Oyun');
+  nb.addEventListener('click', () => {
+    if (!has || nb.dataset.confirm) return G.start(true);
+    nb.dataset.confirm = '1'; nb.textContent = 'Kayıt silinecek — onaylamak için tekrar tıkla';
   });
-  btns.appendChild(newBtn);
+  btns.appendChild(nb);
   btns.appendChild(U.h('button', { class: 'big alt', onclick: G.howTo }, 'Nasıl Oynanır?'));
-  const pc = document.getElementById('title-jade');
-  ART.portrait(pc, DATA.CAST.jade.spec);
+  ART.portrait(document.getElementById('title-jade'), DATA.CAST.jade.spec);
 };
 
 G.howTo = function () {
@@ -77,22 +72,19 @@ G.howTo = function () {
     title: 'Nasıl Oynanır?', wide: true,
     build(b) {
       b.innerHTML = `
-      <p>Sen <b>Jade</b>’sin: SSB Karakolu’nun gözü her şeyi gören, biraz fazla kendinden emin danışmanı. Her gün karakola yeni bir cinayet dosyası gelir. Görevin katili <b>kanıtla</b> bulmak.</p>
+      <p>Sen <b>Jade</b>’sin: SSB Karakolu’nun gözü her şeyi gören danışmanı. Sunset Koyu’nda 150’den fazla insan yaşıyor; hepsinin bir evi, işi, günlük programı ve sırları var.</p>
       <h3>Kontroller</h3>
       <ul>
-        <li><b>WASD / Ok tuşları</b>: yürü (<b>Shift</b> ile koş)</li>
-        <li><b>E / Boşluk</b>: konuş, incele, kullan</li>
-        <li><b>Q</b>: Gözlem modu (odak harcar, gizli ipuçlarını gösterir)</li>
-        <li><b>F / Tab</b>: Dava dosyası (deliller, şüpheliler, görevler, notlar, harita)</li>
-        <li><b>M</b>: sesi aç/kapat</li>
+        <li><b>WASD / Ok tuşları</b>: yürü (<b>Shift</b> koş) • <b>E / Boşluk</b>: konuş, incele • <b>Q</b>: Gözlem • <b>F / Tab</b>: Dosya • <b>M</b>: ses</li>
       </ul>
       <h3>Dedektiflik</h3>
       <ul>
-        <li>Olay yerindeki izler (ayak izi, saç teli, sigara, koku...) katilin profilini çıkarır. Şüphelileri <b>okuyarak</b> (sorguda Gözlem) ve Grace’in <b>geçmiş taramasıyla</b> özelliklerini öğren, sonra karşılaştır.</li>
-        <li>Mazeretleri kafe, otel ve bar çalışanlarına sor. Ölüm saatini otopsiden hesapla.</li>
-        <li>Parmak izi eşleştirme, şifre çözme ve kasa bulmacaları gibi küçük görevler seni bekliyor. Hiçbir ipucu tek başına yetmez; <b>birleştirmen</b> gerekir.</li>
-        <li><b>Odak</b> enerjindir: çay iç, kanepede kestir. Her davanın 3 günlük süresi var. Gece 02.00’yi geçirirsen bayılırsın!</li>
-        <li>Hazır olduğunda Şef Lena’ya katili, yöntemi ve motifi söyle. Yanlış suçlamanın bedeli ağırdır.</li>
+        <li><b>Cesetler</b>: cesede yaklaş ve E’ye bas; ceplerini ara. Bazı eşyalar ancak dikkatle (odak harcayarak) aranınca çıkar.</li>
+        <li><b>İzler</b>: olay yerindeki ayak izi, saç teli, izmarit, koku katilin profilini çıkarır. İnsanları <b>okuyarak</b> (el, sigara, koku) ve Grace’in kayıtlarıyla (ayakkabı, araç) karşılaştır.</li>
+        <li><b>Gizli odalar</b>: bazı evlerde kitaplık ya da gardırop arkasında gizli oda vardır. Gözlem (Q) açıkken parıldar.</li>
+        <li><b>Seri katil</b>: yakalanana kadar her iki gecede bir öldürür. Her ölüm yeni bir iz bırakır; ölü sayısı arttıkça katile yaklaşırsın.</li>
+        <li><b>Lion Lion</b>: yozlaşmış bir CIA-FBI ağı. Kimse kimseyi tanımaz, emir yukarıdan gelir. Ölü noktaları gözetle, üyeleri tek tek ifşa et.</li>
+        <li><b>Yellow Bea</b>: seni katil göstermeye çalışan dâhi. Şüphe göstergen 100 olursa tutuklanırsın. Tanıklarla mazeretini kanıtla, sahte delilleri çürüt.</li>
       </ul>`;
     },
   });
@@ -102,165 +94,228 @@ G.start = function (fresh) {
   SFX.ensure();
   document.getElementById('title').classList.add('hidden');
   document.getElementById('hud').classList.remove('hidden');
-  if (!fresh) {
-    try { G.state = JSON.parse(localStorage.getItem(G.saveKey)); } catch (e) { G.state = null; }
-  }
-  const isNew = !G.state || !G.state.case || fresh;
-  if (isNew) {
-    G.state = {
-      day: 1, time: 8 * 60, money: 40, focus: 100, maxFocus: 100, rep: 0, solved: 0, failed: 0,
-      caseNum: 0, status: null, case: null, k: null, history: [], tea: 0,
-      map: 'station', px: 0, py: 0, dir: 0, seedBase: (Date.now() % 1000000) + 17,
-    };
-    G.newCase();
-    const sp = WORLD.INTERIORS.station.spawn;
-    G.enterMap('station', sp[0], sp[1], 0, true);
-  } else {
+  let loaded = null;
+  if (!fresh) { try { loaded = JSON.parse(localStorage.getItem(G.saveKey)); } catch (e) { loaded = null; } }
+  if (loaded && loaded.v === 2) {
+    G.state = loaded;
+    POP.generate(G.state.seed);
+    G.applyPopState();
     G.enterMap(G.state.map, null, null, G.state.dir, true);
     G.player.x = G.state.px; G.player.y = G.state.py;
     G.snapCam();
+    G.running = true;
+    UI.toast(`Gün ${G.state.day} • ${G.dayName()} • ${U.fmt(G.state.time)}`);
+    return;
   }
+  const seed = (Date.now() % 1000000) + 17;
+  G.state = {
+    v: 2, seed, day: 1, time: 8 * 60, money: 60, focus: 100, maxFocus: 100, rep: 0, solved: 0, failed: 0, tea: 0,
+    map: 'station', px: 0, py: 0, dir: 0, caseNum: 0, current: null, cases: {}, scenes: {}, serial: null,
+    pop: {}, popFix: {}, know: {}, evidence: [], history: [], jlog: {}, talked: [], weather: 'clear',
+  };
+  POP.generate(seed);
+  STORY.init(G.state);
+  G.newStandardCase();
+  const sp = WORLD.INTERIORS.station.spawn;
+  G.enterMap('station', sp[0], sp[1], 0, true);
   G.running = true;
-  if (isNew) G.intro();
-  else UI.toast(`Gün ${G.state.day} • ${G.dayName()} • ${U.fmt(G.state.time)}`);
+  G.runScript(G.intro);
 };
 
 G.intro = async function () {
-  const boss = G.cast('boss');
-  await UI.say(null, `${DATA.TOWN}, Kaliforniya. SSB Karakolu. Sabah saat 08.00.`);
+  await UI.say(null, `${DATA.TOWN}, Kaliforniya. Nüfus: ${POP.people.length + 11}. SSB Karakolu. Sabah saat 08.00.`);
   await UI.say(G.cast('jade'), 'Bu kanepe kasabadaki en iyi düşünme yeri. Bir de en iyi uyuma yeri.');
-  await UI.say(boss, 'JADE! Kanepeden kalk. Masamda yeni bir dosya var. Ofisime gel. Hemen!');
-  await UI.say(null, 'İpucu: Şef Lena sağdaki ofiste. Ona yürü ve E (veya ekrandaki E düğmesi) ile konuş. Dava dosyası için F.');
+  await UI.say(G.cast('boss'), 'JADE! Kanepeden kalk. Masamda yeni bir dosya var. Ofisime gel!');
+  await UI.say(null, 'İpucu: Şef Lena sağdaki ofiste. Yürü ve E ile konuş. Dava dosyası için F. Şehir büyük; karakolun önündeki arabanla her yere gidebilirsin.');
 };
 
 // ============================================================ Yardımcılar
 G.cast = (id) => ({ name: DATA.CAST[id].name, spec: DATA.CAST[id].spec });
-G.dayName = () => DATA.DAYS[(G.state.day - 1) % 7];
-G.place = (id) => DATA.PLACES[id];
-G.sus = (id) => G.state.case.suspects.find((s) => s.id === id);
-G.active = () => G.state.status === 'active';
+G.dayName = (d) => DATA.DAYS[((d || G.state.day) - 1) % 7];
+G.place = (id) => DATA.PLACES[id] || { name: id, short: id };
+G.pwho = (p) => ({ name: p.name, spec: p.spec });
+G.know = function (pid) { const k = G.state.know; return (k[pid] = k[pid] || { met: false, read: false, bg: false }); };
+G.curCase = () => (G.state.current ? G.state.cases[G.state.current] : null);
+G.activeCase = () => { const c = G.curCase(); return c && c.status === 'active' ? c : null; };
 
 G.save = function () {
-  if (!G.state) return;
+  if (!G.state || !G.map) return;
   G.state.px = G.player.x; G.state.py = G.player.y; G.state.dir = G.player.dir; G.state.map = G.map.id;
   try { localStorage.setItem(G.saveKey, JSON.stringify(G.state)); } catch (e) { /* kayıt alanı yok */ }
 };
 
-// Bayılma kontrolü, betik bittikten sonra G.update içinde yapılır.
-G.advance = function (min) {
-  G.state.time += min;
+G.applyPopState = function () {
+  for (const [pid, fix] of Object.entries(G.state.popFix || {})) Object.assign(POP.get(pid).attrs, fix);
+  for (const [pid, ps] of Object.entries(G.state.pop || {})) { const p = POP.get(pid); if (p) Object.assign(p, ps); }
+};
+G.popState = function (pid) { return (G.state.pop[pid] = G.state.pop[pid] || {}); };
+G.killPerson = function (pid) { const p = POP.get(pid); p.alive = false; G.popState(pid).alive = false; };
+G.jail = function (pid) { const p = POP.get(pid); p.jailed = true; G.popState(pid).jailed = true; G.state.jailedOrder = (G.state.jailedOrder || []).concat([pid]); };
+G.overridePerson = function (pid, day, from, to, place) {
+  if (place.startsWith('near:')) {
+    const pl = place.slice(5);
+    const sc = Object.values(G.state.scenes).find((s) => s.place === pl && s.map === 'town' && !s.closed);
+    const b = WORLD.building(pl);
+    let x, y;
+    if (b) { x = b.door.x + 2; y = b.door.y + 1; }
+    else if (sc) { x = sc.body[0] + 2; y = sc.body[1] + 1; }
+    else { const sp = WORLD.maps.town.spots.parkCenter; x = sp[0]; y = sp[1]; }
+    const m = WORLD.maps.town;
+    for (const [dx, dy] of [[0, 0], [1, 0], [-1, 0], [0, 1], [2, 0], [-2, 0], [0, -1], [3, 1], [-3, 1]]) if (!WORLD.isSolid(m, x + dx, y + dy)) { x += dx; y += dy; break; }
+    place = 'at:' + x + ',' + y;
+  }
+  const o = { from: (day - 1) * 1440 + from, to: (day - 1) * 1440 + to, place };
+  const ps = G.popState(pid);
+  ps.overrides = (ps.overrides || []).concat([o]);
+  POP.get(pid).overrides = ps.overrides;
 };
 
-G.useFocus = function (n) {
-  if (G.state.focus < n) { UI.toast('Odak yetersiz! Çay iç ya da biraz dinlen.', 'bad'); SFX.bad(); return false; }
-  G.state.focus -= n;
-  return true;
-};
-G.gainFocus = (n) => { G.state.focus = Math.min(G.state.maxFocus, G.state.focus + n); };
-
-G.addEvidence = function (id, title, text, silent) {
-  const k = G.state.k;
-  if (k.evidence.some((e) => e.id === id)) return;
-  k.evidence.push({ id, title, text, day: G.state.day, time: G.state.time });
+G.addEvidence = function (caseId, id, title, text, silent) {
+  const ev = G.state.evidence;
+  if (ev.some((e) => e.id === id)) return;
+  ev.push({ id, caseId, title, text, day: G.state.day, time: G.state.time });
   if (!silent) UI.toast('Dosyaya eklendi: ' + title, 'good');
 };
 
-// ============================================================ Dava yaşam döngüsü
-G.newCase = function () {
+G.advance = function (min) { G.state.time += min; };
+G.useFocus = function (n) {
+  if (G.state.focus < n) { UI.toast('Odak yetersiz! Çay iç ya da biraz dinlen.', 'bad'); SFX.bad(); return false; }
+  G.state.focus -= n; return true;
+};
+G.gainFocus = (n) => { G.state.focus = Math.min(G.state.maxFocus, G.state.focus + n); };
+
+G.runScript = async function (fn) {
+  if (G.scripting) { G.queued = (G.queued || []).concat([fn]); return; }
+  G.scripting = true;
+  try { await fn(); } catch (e) { console.error(e); }
+  G.scripting = false;
+  G.save();
+  if (G.queued && G.queued.length) { const next = G.queued.shift(); G.runScript(next); }
+};
+
+// Jade'in konum günlüğü (mazeret için)
+G.logJade = function () {
+  const st = G.state;
+  const abs = (st.day - 1) * 1440 + st.time;
+  st.jlog[Math.floor(abs / 30)] = G.map.id;
+};
+G.jadeWitnesses = function (day, minute) {
+  const abs = (day - 1) * 1440 + minute;
+  const place = G.state.jlog[Math.floor(abs / 30)];
+  if (!place || place === 'town' || place.startsWith('secret:')) return [];
+  const d = Math.floor(abs / 1440) + 1, m = abs % 1440;
+  const out = [];
+  for (const p of POP.people) if (POP.where(p, d, m) === place) out.push(p.id);
+  return out.concat(CAST_AT[place] || []);
+};
+
+// ============================================================ Dava oluşturma
+G.newStandardCase = function (opts) {
   const st = G.state;
   st.caseNum += 1;
-  let c = null;
-  for (let i = 0; i < 20 && !c; i++) {
-    try { c = CASEGEN.generate(st.seedBase * 31 + st.caseNum * 7919 + i * 104729, st.caseNum); } catch (e) { console.warn(e); }
-  }
-  st.case = c;
-  st.k = CASEGEN.newKnowledge(c);
-  st.status = 'pending';
+  const s = st.story;
+  const ex = Object.keys(s.members).filter((id) => !(opts && opts.agent === id));
+  if (st.serial) ex.push(st.serial.killer);
+  let res = null;
+  for (let i = 0; i < 6 && !res; i++) res = CASES.genStandard(st.seed * 31 + st.caseNum * 7919 + i * 977, st.caseNum, st.day - 1, Object.assign({ exclude: ex, netMembers: Object.keys(s.members) }, opts || {}));
+  if (!res) return;
+  st.cases[res.c.id] = res.c;
+  st.scenes[res.scene.id] = res.scene;
+  st.current = res.c.id;
+  G.killPerson(res.c.victim);
+  G.overridePerson(res.c.witness.pid, st.day, 8 * 60, 20 * 60, 'near:' + res.scene.place);
+  G.overridePerson(res.c.witness.pid, st.day + 1, 8 * 60, 20 * 60, 'near:' + res.scene.place);
 };
-
-G.tasks = function () {
-  const st = G.state, c = st.case, k = st.k;
-  if (!c || st.status === 'closed') return [{ t: 'Kanepede uyu; yarın yeni dava gelecek', done: false, where: 'Karakol' }];
-  if (st.status === 'pending') return [{ t: 'Şef Lena ile konuş: yeni bir dava var', done: false, where: 'Karakol' }];
-  const L = [];
-  const total = c.clues.length, found = c.clues.filter((cl) => k.found[cl.id]).length;
-  const hiddenLeft = c.clues.some((cl) => cl.hidden && !k.found[cl.id]);
-  L.push({ t: `Olay yerini incele (${found}/${total} ipucu)`, done: found === total, where: G.place(c.scene).short, hint: hiddenLeft && found >= total - 2 ? 'Bazı ipuçları yalnızca Gözlem (Q) ile görünür.' : null });
-  L.push({ t: 'Olay yerinin önündeki komşu tanıkla konuş', done: k.neighbor, where: G.place(c.scene).short + ' önü' });
-  L.push({ t: 'Otopsi bulgularını Dr. Ortiz ile yorumla', done: k.autopsy, where: 'Adli Tıp' });
-  for (const s of c.suspects) {
-    const ks = k.sus[s.id];
-    L.push({ t: `${s.name}: sorgula (ilişki, mazeret) ve oku`, done: ks.met && ks.motive && ks.alibi && ks.read, where: G.place(s.loc).short });
-  }
-  L.push({ t: 'Şüphelilerin geçmişini Grace’e tarat', done: c.suspects.every((s) => k.sus[s.id].bg), where: 'Karakol' });
-  const verifiable = c.suspects.filter((s) => s.alibi.place);
-  L.push({ t: 'Mazeretleri tanıklara doğrulat', done: verifiable.every((s) => k.sus[s.id].checked), where: 'Kafe / Otel / Bar' });
-  if (c.feats.print && k.found.print) L.push({ t: 'Kısmi parmak izini Sam ile karşılaştır', done: k.print, where: 'Adli Tıp' });
-  if (c.feats.cipher && k.found.cipher) L.push({ t: 'Şifreli notu çöz (Dosya → Deliller)', done: k.cipher, where: 'Dosya' });
-  if (c.feats.safe && k.sceneVisited) L.push({ t: 'Kurbanın kasasını aç', done: k.safe, where: G.place(c.scene).short });
-  L.push({ t: 'Katili Şef Lena’ya bildir', done: false, where: 'Karakol' });
-  return L;
-};
-
-G.nextTask = function () { return G.tasks().find((t) => !t.done); };
 
 // ============================================================ Haritalar ve NPC'ler
 G.enterMap = function (id, tx, ty, dir, instant) {
-  const m = WORLD.maps[id];
+  const m = WORLD.getMap(id);
   G.map = m;
   G.revealed = false;
   if (tx != null) { G.player.x = tx * TS + 8; G.player.y = ty * TS + 12; }
   G.player.dir = dir || 0;
-  G.npcs = G.npcsFor(id);
-  if (G.state.case && G.active() && id === G.state.case.scene && !G.state.k.sceneVisited) {
-    G.state.k.sceneVisited = true;
-    setTimeout(() => G.sceneArrival(), 350);
-  }
+  G.npcSlot = -1;
+  G.refreshNpcs(true);
   G.snapCam();
   if (!instant) { G.fade = 1; SFX.door(); }
+  G.checkSceneArrival();
   G.save();
 };
 
+G.checkSceneArrival = function () {
+  for (const sc of Object.values(G.state.scenes)) {
+    if (sc.map !== G.map.id || sc.visited || sc.closed) continue;
+    if (G.map.id === 'town' && Math.hypot(sc.body[0] - G.player.x / TS, sc.body[1] - G.player.y / TS) > 12) continue;
+    sc.visited = true;
+    setTimeout(() => G.runScript(() => TALK.sceneArrival(sc)), 300);
+  }
+};
+
 G.mkNpc = function (o) {
-  return Object.assign({ dir: 0, anim: 0, moving: false }, o, { x: o.tx * TS + 8, y: o.ty * TS + 12 });
+  return Object.assign({ dir: 0, anim: 0, moving: false, blinkT: Math.random() * 4 }, o, { x: o.tx * TS + 8, y: o.ty * TS + 12 });
+};
+
+G.refreshNpcs = function (force) {
+  const st = G.state;
+  const slot = Math.floor(((st.day - 1) * 1440 + st.time) / 30);
+  if (!force && slot === G.npcSlot) return;
+  G.npcSlot = slot;
+  const old = new Map(G.npcs.map((n) => [n.id, n]));
+  const temps = G.npcs.filter((n) => n.temp);
+  G.npcs = G.npcsFor(G.map.id).map((n) => (old.has(n.id) && !force ? Object.assign(n, { x: old.get(n.id).x, y: old.get(n.id).y }) : n)).concat(force ? [] : temps);
 };
 
 G.npcsFor = function (id) {
   const L = [];
-  const st = G.state, c = st.case;
-  const m = WORLD.maps[id];
-  const spot = (key) => m.spots && m.spots[key];
-  const castNpc = (cid, key) => { const s = spot(key); if (s) L.push(G.mkNpc({ id: cid, name: DATA.CAST[cid].name, spec: DATA.CAST[cid].spec, tx: s[0], ty: s[1], dir: s[2] })); };
-  if (id === 'station') ['boss', 'grace', 'kevin', 'ray'].forEach((k) => castNpc(k, k));
-  if (id === 'lab') { castNpc('ortiz', 'ortiz'); castNpc('sam', 'sam'); }
-  if (id === 'cafe') castNpc('mia', 'mia');
-  if (id === 'hotel') castNpc('hector', 'hector');
-  if (id === 'bar') castNpc('lou', 'lou');
-  if (c && G.active()) {
-    for (const s of c.suspects) if (s.loc === id) { const sp = spot('guest'); L.push(G.mkNpc({ id: 'sus:' + s.id, name: s.name, spec: s.spec, tx: sp[0], ty: sp[1], dir: sp[2] })); }
-    if (id === c.scene) {
-      const used = new Set(c.clues.map((cl) => cl.x + ',' + cl.y));
-      if (c.safe) used.add(c.safe.x + ',' + c.safe.y);
-      const opts = WORLD.free[id].filter(([x, y]) => !used.has(x + ',' + y));
-      const tgt = [m.door.x + 2, m.h - 3];
-      opts.sort((a, b) => (Math.abs(a[0] - tgt[0]) + Math.abs(a[1] - tgt[1])) - (Math.abs(b[0] - tgt[0]) + Math.abs(b[1] - tgt[1])));
-      const p = opts[0];
-      L.push(G.mkNpc({ id: 'cop', name: DATA.CAST.cop.name, spec: DATA.CAST.cop.spec, tx: p[0], ty: p[1], dir: 0 }));
-    }
-    if (id === 'town') {
-      const b = WORLD.building(c.scene);
-      const cands = [[2, 1], [-2, 1], [2, 2], [-2, 2], [3, 1], [-3, 1], [1, 2], [-1, 2]];
-      for (const [dx, dy] of cands) {
-        const x = b.door.x + dx, y = b.door.y + dy;
-        if (!WORLD.isSolid(m, x, y)) { L.push(G.mkNpc({ id: 'neighbor', name: c.neighbor.name, spec: c.neighbor.spec, tx: x, ty: y, dir: dx > 0 ? 2 : 3 })); break; }
-      }
-    }
+  const st = G.state;
+  const m = WORLD.getMap(id);
+  const used = new Set();
+  const spotFree = (x, y) => !used.has(x + ',' + y) && !WORLD.isSolid(m, x, y);
+  const addAt = (o, x, y) => { used.add(x + ',' + y); L.push(G.mkNpc(Object.assign(o, { tx: x, ty: y }))); };
+  for (const cid of CAST_AT[id] || []) { const s = m.spots[cid]; if (s) addAt({ id: cid, name: DATA.CAST[cid].name, spec: DATA.CAST[cid].spec, dir: s[2] }, s[0], s[1]); }
+  if (id === 'station') {
+    const jailed = (st.jailedOrder || []).slice(-2);
+    jailed.forEach((pid, i) => { const p = POP.get(pid); const s = m.spots['cell' + (i + 1)]; if (p && s) addAt({ id: 'p:' + pid, pid, name: p.name + ' (gözaltı)', spec: p.spec, dir: 0, jailedNpc: true }, s[0], s[1]); });
   }
-  if (id === 'town') {
-    const homes = [[12, 18], [36, 16], [47, 41]];
-    DATA.WALKERS.forEach((w, i) => {
-      L.push(G.mkNpc({ id: 'walker:' + i, name: w.name, spec: w.spec, tx: homes[i][0], ty: homes[i][1], dir: 0, home: homes[i], wander: { t: 1 + i, tx: null, ty: null } }));
-    });
+  for (const sc of Object.values(st.scenes)) {
+    if (sc.map !== id || sc.closed || id === 'town') continue;
+    const opts = m.free.filter(([x, y]) => spotFree(x, y) && !sc.clues.some((c) => c.x === x && c.y === y) && !(y === sc.body[1] && x >= sc.body[0] - 1 && x <= sc.body[0] + 2));
+    opts.sort((a, b) => (Math.abs(a[0] - m.door.x - 2) + Math.abs(a[1] - m.h + 3)) - (Math.abs(b[0] - m.door.x - 2) + Math.abs(b[1] - m.h + 3)));
+    if (opts[0]) addAt({ id: 'cop', name: DATA.CAST.cop.name, spec: DATA.CAST.cop.spec, dir: 0 }, opts[0][0], opts[0][1]);
+  }
+  const day = st.day, time = Math.min(st.time, 26 * 60 - 1);
+  const town = id === 'town';
+  const tm = WORLD.maps.town;
+  let townCount = 0;
+  const bodyTiles = new Set();
+  for (const sc of Object.values(st.scenes)) if (sc.map === id && !sc.closed) { bodyTiles.add(sc.body[0] + ',' + sc.body[1]); bodyTiles.add((sc.body[0] + 1) + ',' + sc.body[1]); }
+  for (const p of POP.people) {
+    const loc = POP.where(p, day, time);
+    if (!loc) continue;
+    if (!town) {
+      if (loc !== id) continue;
+      let pos = null;
+      if (p.work === id && m.spots.staff && spotFree(m.spots.staff[0], m.spots.staff[1])) pos = m.spots.staff;
+      if (!pos) {
+        const fr = m.free.filter(([x, y]) => spotFree(x, y) && !bodyTiles.has(x + ',' + y));
+        if (!fr.length) continue;
+        pos = fr[U.hash(p.id, day, Math.floor(time / 30)) % fr.length];
+      }
+      addAt({ id: 'p:' + p.id, pid: p.id, name: p.name, spec: p.spec, dir: U.hash(p.id, time) % 4 }, pos[0], pos[1]);
+      continue;
+    }
+    let anchor = null;
+    if (loc.startsWith('at:')) anchor = loc.slice(3).split(',').map(Number);
+    else if (loc === 'park') { const sp = WORLD.townSpots('park'); anchor = sp[U.hash(p.id, day, 'pk') % sp.length]; }
+    else if (loc === 'lighthouse') anchor = tm.spots.bench;
+    else if (loc === 'walk') { const b = WORLD.building(p.home); if (b) anchor = [b.door.x + (U.hash(p.id, day) % 7) - 3, b.door.y + 2]; }
+    if (!anchor) continue;
+    if (++townCount > 70) continue;
+    let [x, y] = anchor;
+    for (let k = 0; k < 12 && (!spotFree(x, y) || bodyTiles.has(x + ',' + y)); k++) { x = anchor[0] + (U.hash(p.id, k) % 5) - 2; y = anchor[1] + (U.hash(k, p.id) % 3) - 1; }
+    if (!spotFree(x, y)) continue;
+    const pinned = loc.startsWith('at:');
+    addAt({ id: 'p:' + p.id, pid: p.id, name: p.name, spec: p.spec, dir: 0, home: [anchor[0], anchor[1]], wander: pinned ? null : { t: 1 + Math.random() * 4, tx: null } }, x, y);
   }
   return L;
 };
@@ -269,11 +324,12 @@ G.npcsFor = function (id) {
 G.bindInput = function () {
   window.addEventListener('keydown', (e) => {
     const k = e.key;
-    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' ', 'Tab'].includes(k) && !/INPUT|TEXTAREA/.test(document.activeElement.tagName)) e.preventDefault();
-    if (/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName) && k !== 'Escape') return;
+    const typing = /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName);
+    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' ', 'Tab'].includes(k) && !typing) e.preventDefault();
+    if (typing && k !== 'Escape') return;
     SFX.ensure();
     if (!G.running) return;
-    if (k === 'm' || k === 'M') { SFX.muted = !SFX.muted; UI.toast(SFX.muted ? 'Ses kapalı' : 'Ses açık'); return; }
+    if ((k === 'm' || k === 'M') && !UI.busy()) { SFX.muted = !SFX.muted; UI.toast(SFX.muted ? 'Ses kapalı' : 'Ses açık'); return; }
     if (UI.key(k)) return;
     G.keys[k.toLowerCase()] = true;
     if (e.repeat) return;
@@ -283,8 +339,8 @@ G.bindInput = function () {
   });
   window.addEventListener('keyup', (e) => { G.keys[e.key.toLowerCase()] = false; });
   window.addEventListener('blur', () => { G.keys = {}; });
-  // Dokunmatik kontroller
   const pad = document.getElementById('dpad');
+  const knob = document.getElementById('dknob');
   const setDir = (e) => {
     const r = pad.getBoundingClientRect();
     const t = e.touches ? e.touches[0] : e;
@@ -292,15 +348,14 @@ G.bindInput = function () {
     const len = Math.hypot(dx, dy);
     if (len < 8) { G.touch.x = 0; G.touch.y = 0; return; }
     G.touch.x = dx / len; G.touch.y = dy / len;
-    const knob = document.getElementById('dknob');
     const kl = Math.min(len, r.width / 2 - 18);
     knob.style.transform = `translate(${(dx / len) * kl}px, ${(dy / len) * kl}px)`;
   };
-  const clear = () => { G.touch.x = 0; G.touch.y = 0; document.getElementById('dknob').style.transform = ''; };
+  const clear = () => { G.touch.x = 0; G.touch.y = 0; knob.style.transform = ''; };
   pad.addEventListener('touchstart', (e) => { e.preventDefault(); setDir(e); }, { passive: false });
   pad.addEventListener('touchmove', (e) => { e.preventDefault(); setDir(e); }, { passive: false });
   pad.addEventListener('touchend', clear); pad.addEventListener('touchcancel', clear);
-  const btn = (id, fn) => document.getElementById(id).addEventListener('touchstart', (e) => { e.preventDefault(); SFX.ensure(); if (!G.running) return; fn(); }, { passive: false });
+  const btn = (id, fn) => document.getElementById(id).addEventListener('touchstart', (e) => { e.preventDefault(); SFX.ensure(); if (G.running) fn(); }, { passive: false });
   btn('tb-e', () => { if (!UI.key('e')) G.interact(); });
   btn('tb-q', () => { if (!UI.busy()) G.observe(); });
   btn('tb-f', () => { if (!UI.busy()) DOSSIER.open(); });
@@ -315,23 +370,32 @@ G.loop = function (ts) {
   G.t += dt;
   if (G.running && G.map) {
     if (!UI.busy() && !G.scripting) G.update(dt);
+    else G.animOnly(dt);
     G.render();
     G.updateHud();
   }
   requestAnimationFrame(G.loop);
 };
 
+G.animOnly = function (dt) {
+  for (const n of G.npcs) { n.blinkT -= dt; if (n.blinkT < -0.15) n.blinkT = 2 + Math.random() * 4; }
+  if (G.fade > 0) G.fade = Math.max(0, G.fade - dt * 3);
+  if (G.observeFx > 0) G.observeFx = Math.max(0, G.observeFx - dt);
+  G.updateFx(dt);
+};
+
 G.update = function (dt) {
   const st = G.state;
+  const before = st.time;
   st.time += dt * MIN_PER_SEC;
-  if (st.time >= 26 * 60) { G.faint(); return; }
-  // Hareket
+  if (Math.floor(before / 10) !== Math.floor(st.time / 10)) G.logJade();
+  if (st.time >= 26 * 60) { G.runScript(() => G.newDay(true)); return; }
   let mx = 0, my = 0;
   const K = G.keys;
-  if (K['a'] || K['arrowleft']) mx -= 1;
-  if (K['d'] || K['arrowright']) mx += 1;
-  if (K['w'] || K['arrowup']) my -= 1;
-  if (K['s'] || K['arrowdown']) my += 1;
+  if (K.a || K.arrowleft) mx -= 1;
+  if (K.d || K.arrowright) mx += 1;
+  if (K.w || K.arrowup) my -= 1;
+  if (K.s || K.arrowdown) my += 1;
   if (!mx && !my) { mx = G.touch.x; my = G.touch.y; }
   const p = G.player;
   const len = Math.hypot(mx, my);
@@ -339,27 +403,30 @@ G.update = function (dt) {
   if (p.moving) {
     mx /= len; my /= len;
     if (Math.abs(mx) > Math.abs(my)) p.dir = mx < 0 ? 2 : 3; else p.dir = my < 0 ? 1 : 0;
-    const sp = (K['shift'] ? RUN : SPEED) * dt;
-    G.moveBody(p, mx * sp, 0, true);
-    G.moveBody(p, 0, my * sp, true);
-    p.anim += dt * (K['shift'] ? 11 : 8);
+    const sp = (K.shift ? RUN : SPEED) * dt;
+    G.moveBody(p, mx * sp, 0);
+    G.moveBody(p, 0, my * sp);
+    p.anim += dt * (K.shift ? 11 : 8);
   } else p.anim = 0;
-  // Kapılar
   const tx = Math.floor(p.x / TS), ty = Math.floor((p.y - 3) / TS);
   if (G.map.kind === 'town') {
     const d = G.map.doors.find((dd) => dd.x === tx && dd.y === ty);
-    if (d) { const im = WORLD.maps[d.to]; G.enterMap(d.to, im.door.x, im.h - 2, 1); return; }
+    if (d) { const im = WORLD.getMap(d.to); G.enterMap(d.to, im.door.x, im.h - 2, 1); return; }
+    G.checkSceneArrival();
   } else if (ty >= G.map.h - 1) {
+    if (G.map.secretOf) { const host = WORLD.getMap(G.map.secretOf); const sp = G.state.secretEntry || [host.door.x, host.h - 2]; G.enterMap(G.map.secretOf, sp[0], sp[1], 0); return; }
     const b = WORLD.building(G.map.id);
     G.enterMap('town', b.door.x, b.door.y + 1, 0);
     return;
   }
-  // NPC'ler
-  for (const n of G.npcs) if (n.wander) G.updateWalker(n, dt);
-  // Kamera
+  for (const n of G.npcs) { if (n.wander) G.updateWalker(n, dt); n.blinkT -= dt; if (n.blinkT < -0.15) n.blinkT = 2 + Math.random() * 4; }
+  G.refreshNpcs(false);
   G.followCam(dt);
   if (G.fade > 0) G.fade = Math.max(0, G.fade - dt * 3);
   if (G.observeFx > 0) G.observeFx = Math.max(0, G.observeFx - dt);
+  G.updateFx(dt);
+  STORY.checkDrops();
+  STORY.checkFinal();
   G.autosaveT = (G.autosaveT || 0) + dt;
   if (G.autosaveT > 20) { G.autosaveT = 0; G.save(); }
 };
@@ -381,14 +448,13 @@ G.blocked = function (body, x, y) {
 };
 
 G.dynSolid = function (tx, ty) {
-  const c = G.state.case;
-  return !!(c && c.safe && G.active() && G.map.id === c.scene && c.safe.x === tx && c.safe.y === ty);
+  for (const sc of Object.values(G.state.scenes)) if (sc.safe && !sc.closed && sc.map === G.map.id && sc.safe.x === tx && sc.safe.y === ty) return true;
+  return false;
 };
 
 G.moveBody = function (b, dx, dy) {
   const nx = b.x + dx, ny = b.y + dy;
   if (!G.blocked(b, nx, ny)) { b.x = nx; b.y = ny; return true; }
-  // köşelerden kayma
   if (dx && !dy) for (const off of [-4, 4]) if (!G.blocked(b, nx, b.y + off) && !G.blocked(b, b.x, b.y + off)) { b.y += off * 0.25; return false; }
   if (dy && !dx) for (const off of [-4, 4]) if (!G.blocked(b, b.x + off, ny) && !G.blocked(b, b.x + off, b.y)) { b.x += off * 0.25; return false; }
   return false;
@@ -401,14 +467,13 @@ G.updateWalker = function (n, dt) {
     n.moving = false; n.anim = 0;
     if (w.t <= 0) {
       const tx = n.home[0] + Math.floor(Math.random() * 9) - 4, ty = n.home[1] + Math.floor(Math.random() * 5) - 2;
-      if (!WORLD.isSolid(G.map, tx, ty)) { w.tx = tx * TS + 8; w.ty = ty * TS + 12; w.t = 6; }
-      else w.t = 0.5;
+      if (!WORLD.isSolid(G.map, tx, ty)) { w.tx = tx * TS + 8; w.ty = ty * TS + 12; w.t = 6; } else w.t = 0.5;
     }
     return;
   }
   const dx = w.tx - n.x, dy = w.ty - n.y;
   const d = Math.hypot(dx, dy);
-  if (d < 2 || w.t <= 0) { w.tx = null; w.t = 2 + Math.random() * 4; return; }
+  if (d < 2 || w.t <= 0) { w.tx = null; w.t = 2 + Math.random() * 5; return; }
   const sp = 30 * dt;
   const mx = dx / d, my = dy / d;
   if (Math.abs(mx) > Math.abs(my)) n.dir = mx < 0 ? 2 : 3; else n.dir = my < 0 ? 1 : 0;
@@ -418,13 +483,33 @@ G.updateWalker = function (n, dt) {
   n.moving = true; n.anim += dt * 6;
 };
 
+// Betik içinde bir NPC'yi bir karoya yürüt
+G.walkNpc = function (n, tx, ty) {
+  return new Promise((res) => {
+    const tgtX = tx * TS + 8, tgtY = ty * TS + 12;
+    let t = 0;
+    const step = () => {
+      const dt = 1 / 60;
+      t += dt;
+      const dx = tgtX - n.x, dy = tgtY - n.y;
+      const d = Math.hypot(dx, dy);
+      if (d < 2 || t > 6) { n.moving = false; res(); return; }
+      const mx = dx / d, my = dy / d;
+      n.x += mx * 50 * dt; n.y += my * 50 * dt;
+      n.dir = Math.abs(mx) > Math.abs(my) ? (mx < 0 ? 2 : 3) : (my < 0 ? 1 : 0);
+      n.moving = true; n.anim += dt * 7;
+      requestAnimationFrame(step);
+    };
+    step();
+  });
+};
+
 G.viewW = () => G.canvas.width / G.S;
 G.viewH = () => G.canvas.height / G.S;
-
 G.camTarget = function () {
   const vw = G.viewW(), vh = G.viewH();
   const mw = G.map.w * TS, mh = G.map.h * TS;
-  let x = G.player.x - vw / 2, y = G.player.y - 12 - vh / 2;
+  let x = G.player.x - vw / 2, y = G.player.y - 14 - vh / 2;
   x = mw <= vw ? (mw - vw) / 2 : U.clamp(x, 0, mw - vw);
   y = mh <= vh ? (mh - vh) / 2 : U.clamp(y, 0, mh - vh);
   return [x, y];
@@ -436,13 +521,35 @@ G.followCam = function (dt) {
   G.cam.x += (x - G.cam.x) * k; G.cam.y += (y - G.cam.y) * k;
 };
 
+// ============================================================ Ortam efektleri
+G.updateFx = function (dt) {
+  const st = G.state;
+  const h = st.time / 60;
+  if (G.map.kind === 'town') {
+    if (h > 7 && h < 18 && st.weather === 'clear' && G.birds.length < 4 && Math.random() < dt * 0.15) {
+      G.birds.push({ x: G.cam.x - 10, y: G.cam.y + Math.random() * G.viewH() * 0.6, vx: 40 + Math.random() * 20, vy: -4 + Math.random() * 8, t: 0 });
+    }
+    if (Math.random() < dt * 3) {
+      const s = G.map.smoke[Math.floor(Math.random() * G.map.smoke.length)];
+      if (s && Math.abs(s.x - G.player.x) < 400 && Math.abs(s.y - G.player.y) < 300) G.fx.push({ kind: 'smoke', x: s.x, y: s.y, vy: -10, vx: 3, life: 3, t: 0 });
+    }
+    if ((h > 20.5 || h < 5) && st.weather === 'clear' && Math.random() < dt * 2) G.fx.push({ kind: 'fly', x: G.cam.x + Math.random() * G.viewW(), y: G.cam.y + Math.random() * G.viewH(), vx: (Math.random() - 0.5) * 8, vy: (Math.random() - 0.5) * 8, life: 4, t: 0 });
+    if (st.weather === 'rain') for (let i = 0; i < 6; i++) G.fx.push({ kind: 'rain', x: G.cam.x + Math.random() * (G.viewW() + 60), y: G.cam.y - 10, vx: -40, vy: 260, life: 0.8, t: 0 });
+  }
+  for (const b of G.birds) { b.x += b.vx * dt; b.y += b.vy * dt; b.t += dt; }
+  G.birds = G.birds.filter((b) => b.x < G.cam.x + G.viewW() + 20 && b.t < 30);
+  for (const f of G.fx) { f.t += dt; f.x += f.vx * dt; f.y += f.vy * dt; }
+  G.fx = G.fx.filter((f) => f.t < f.life);
+};
+
 // ============================================================ Çizim
 G.drawChar = function (ctx, c) {
   const sheet = ART.charSheet(c.spec);
-  const frame = c.moving ? [1, 0, 2, 0][Math.floor(c.anim) % 4] : 0;
-  ctx.fillStyle = 'rgba(0,0,0,0.22)';
+  let frame = c.moving ? [1, 0, 2, 0][Math.floor(c.anim) % 4] : 0;
+  if (!c.moving && c.blinkT != null && c.blinkT < 0) frame = 3;
+  ctx.fillStyle = 'rgba(0,0,0,0.25)';
   ctx.beginPath(); ctx.ellipse(Math.round(c.x), Math.round(c.y) - 1, 6, 2.5, 0, 0, Math.PI * 2); ctx.fill();
-  ctx.drawImage(sheet.img, frame * sheet.cw, c.dir * sheet.ch, sheet.cw, sheet.ch, Math.round(c.x) - 9, Math.round(c.y) - 25, sheet.cw, sheet.ch);
+  ctx.drawImage(sheet.img, frame * sheet.cw, c.dir * sheet.ch, sheet.cw, sheet.ch, Math.round(c.x) - 9, Math.round(c.y) - 33, sheet.cw, sheet.ch);
 };
 
 G.render = function () {
@@ -455,57 +562,66 @@ G.render = function () {
   ctx.save();
   ctx.setTransform(S, 0, 0, S, -cx * S, -cy * S);
   ctx.drawImage(m.ground, 0, 0);
-  // Su parıltısı
   if (m.kind === 'town') {
-    ctx.fillStyle = 'rgba(214,238,248,0.5)';
-    for (let i = 0; i < 18; i++) {
-      const x = ((i * 97 + Math.floor(G.t * 8) * 3) % (m.w * TS)), y = 42 * TS + 6 + (i * 13) % 24;
+    ctx.fillStyle = 'rgba(214,238,248,0.45)';
+    for (let i = 0; i < 40; i++) {
+      const x = ((i * 97 + Math.floor(G.t * 6) * 3) % (m.w * TS)), y = 85 * TS + 6 + (i * 13) % 140;
       ctx.fillRect(x, y, 3, 1);
     }
   }
-  const c = G.state.case;
-  const atScene = c && G.active() && m.id === c.scene;
-  if (atScene) {
-    if (m.body) ctx.drawImage(G.chalk, m.body[0] * TS, m.body[1] * TS - 4);
-    const k = G.state.k;
+  const vx0 = cx - 64, vx1 = cx + G.viewW() + 64, vy0 = cy - 64, vy1 = cy + G.viewH() + 110;
+  const tape = ART.prop('tape');
+  for (const sc of Object.values(G.state.scenes)) {
+    if (sc.map !== m.id || sc.closed) continue;
+    const bx = sc.body[0] * TS, by = sc.body[1] * TS;
+    if (bx < vx0 || bx > vx1 || by < vy0 || by > vy1) continue;
+    if (['kunt', 'bicak'].includes(sc.method)) ctx.drawImage(ART.prop('blood'), bx + 2, by + 2);
+    if (!sc.autopsy) ctx.drawImage(ART.body(POP.get(sc.victim).spec), bx - 1, by - 1);
+    else { ctx.strokeStyle = '#f4f1ea'; ctx.lineWidth = 1; ctx.strokeRect(bx + 1.5, by + 2.5, 28, 11); }
+    if (m.kind === 'town') for (let i = -2; i <= 3; i++) { ctx.drawImage(tape, bx + i * 16, by - 22); ctx.drawImage(tape, bx + i * 16, by + 28); }
     let n = 1;
-    for (const cl of c.clues) {
-      if (k.found[cl.id]) {
-        ctx.fillStyle = '#f2d22e'; ctx.fillRect(cl.x * TS + 5, cl.y * TS + 6, 6, 6);
-        ctx.fillStyle = '#222'; ctx.font = 'bold 5px monospace'; ctx.fillText(String(n), cl.x * TS + 6.5, cl.y * TS + 11);
-        n++;
-        continue;
-      }
+    for (const cl of sc.clues) {
+      if (sc.found[cl.id]) { ctx.drawImage(ART.prop('marker'), cl.x * TS + 3, cl.y * TS + 3); ctx.fillStyle = '#222'; ctx.font = 'bold 6px monospace'; ctx.fillText(String(n++), cl.x * TS + 6, cl.y * TS + 11); continue; }
       if (cl.hidden && !G.revealed) continue;
       const f = Math.floor(G.t * 6) % 4;
-      ctx.drawImage(cl.hidden ? G.sparkFramesH[f] : G.sparkFrames[f], cl.x * TS, cl.y * TS - 2 + Math.sin(G.t * 4) * 1.5);
+      ctx.drawImage(cl.hidden ? G.sparkH[f] : G.spark[f], cl.x * TS, cl.y * TS - 2 + Math.sin(G.t * 4) * 1.5);
     }
-    if (c.safe) ctx.drawImage(G.safeImg, c.safe.x * TS, c.safe.y * TS - 10);
+    if (sc.safe) { const R = (x, y, w, h, col) => { ctx.fillStyle = col; ctx.fillRect(sc.safe.x * TS + x, sc.safe.y * TS + y, w, h); }; ART.FURN.safe.draw(R); }
   }
-  // Y sıralı nesneler
-  const vx0 = cx - 48, vx1 = cx + G.viewW() + 48, vy0 = cy - 48, vy1 = cy + G.viewH() + 80;
+  if (G.revealed && G.map.kind === 'interior' && G.state.secrets[G.map.id]) {
+    const f = Math.floor(G.t * 6) % 4;
+    for (const [k, a] of Object.entries(G.map.acts)) if (a === 'shelf') { const [x, y] = k.split(',').map(Number); ctx.drawImage(G.sparkH[f], x * TS, y * TS - 4); break; }
+  }
   const list = [];
   for (const o of m.objects) {
     if (o.x > vx1 || o.y > vy1 || o.x + o.img.width < vx0 || o.y + o.img.height < vy0) continue;
     list.push(o);
   }
   for (const n of G.npcs) list.push({ base: n.y, npc: n });
-  list.push({ base: G.player.y, npc: Object.assign({ spec: DATA.CAST.jade.spec }, G.player) });
+  list.push({ base: G.player.y, npc: Object.assign({ spec: DATA.CAST.jade.spec, blinkT: (G.t % 5) < 0.12 ? -0.1 : 1 }, G.player) });
   list.sort((a, b) => a.base - b.base);
   for (const o of list) {
     if (o.npc) G.drawChar(ctx, o.npc);
+    else if (o.bob) ctx.drawImage(o.img, Math.round(o.x), Math.round(o.y + Math.sin(G.t * 1.5 + o.x) * 1.2));
+    else if (o.kind === 'tree' && G.state.weather !== 'clear') ctx.drawImage(o.img, Math.round(o.x + Math.sin(G.t * 2 + o.x * 0.1)), Math.round(o.y));
     else ctx.drawImage(o.img, Math.round(o.x), Math.round(o.y));
   }
-  // Konuşulabilir şüpheli işareti
+  for (const o of m.objects) if (o.anim === 'fountain' && Math.abs(o.x - G.player.x) < 400) {
+    ctx.fillStyle = 'rgba(200,230,255,0.85)';
+    for (let i = 0; i < 6; i++) { const a = (G.t * 3 + i * 0.17) % 1; ctx.fillRect(o.x + 24 + Math.cos(i) * 8 * a, o.y + 8 + a * a * 14 - a * 6, 1, 2); }
+  }
+  for (const f of G.fx) {
+    if (f.kind === 'smoke') { ctx.globalAlpha = 0.5 * (1 - f.t / f.life); ctx.drawImage(ART.prop('chimneysmoke'), f.x + Math.sin(f.t * 2) * 3, f.y); ctx.globalAlpha = 1; }
+    if (f.kind === 'fly') { ctx.fillStyle = `rgba(255,240,120,${0.8 * Math.sin(Math.PI * f.t / f.life)})`; ctx.fillRect(f.x, f.y, 1.5, 1.5); }
+    if (f.kind === 'rain') { ctx.fillStyle = 'rgba(180,200,230,0.55)'; ctx.fillRect(f.x, f.y, 1, 5); }
+  }
+  for (const b of G.birds) ctx.drawImage(ART.prop('bird'), Math.round(b.x), Math.round(b.y + Math.sin(b.t * 8) * 1.5));
   for (const n of G.npcs) {
-    if (!n.id.startsWith('sus:') && n.id !== 'neighbor') continue;
-    const done = n.id === 'neighbor' ? G.state.k.neighbor : G.state.k.sus[n.id.slice(4)].read;
-    if (done) continue;
-    const by = n.y - 32 + Math.sin(G.t * 3) * 1.5;
+    if (!n.pid || !G.npcMark(n.pid)) continue;
+    const by = n.y - 42 + Math.sin(G.t * 3) * 1.5;
     ctx.fillStyle = '#2b1d1a'; ctx.fillRect(n.x - 2, by - 1, 5, 9);
     ctx.fillStyle = '#ffd25a'; ctx.fillRect(n.x - 1, by, 3, 5); ctx.fillRect(n.x - 1, by + 6, 3, 1);
   }
-  // Etkileşim balonu
   const tgt = G.findTarget();
   if (tgt && !UI.busy()) {
     const bx = Math.round(tgt.px) - 6, by = Math.round(tgt.py) - 8 + Math.round(Math.sin(G.t * 5));
@@ -514,19 +630,18 @@ G.render = function () {
     ctx.fillStyle = '#2b1d1a'; ctx.font = 'bold 8px monospace'; ctx.fillText('E', bx + 3.5, by + 8);
   }
   ctx.restore();
-
   G.renderLight();
-
-  // Bina isimleri
   if (m.kind === 'town') {
     ctx.save();
     ctx.font = `${Math.round(5.5 * S)}px "Pixelify Sans", monospace`;
     ctx.textAlign = 'center';
+    const active = new Set(Object.values(G.state.scenes).filter((s) => !s.closed).map((s) => s.place));
     for (const b of WORLD.BUILDINGS) {
       const dx = (b.door.x + 0.5) * TS - G.player.x, dy = (b.door.y + 1) * TS - G.player.y;
       if (dx * dx + dy * dy > (TS * 4.5) ** 2) continue;
-      const sx = ((b.door.x + 0.5) * TS - cx) * S, sy = ((b.door.y - 2.2) * TS - cy) * S;
-      const label = b.name + (c && G.active() && c.scene === b.id ? ' 🚨' : '');
+      const sx = ((b.door.x + 0.5) * TS - cx) * S, sy = ((b.door.y - 2.6) * TS - cy) * S;
+      const own = b.house ? POP.people.find((p) => p.home === b.id) : null;
+      const label = (b.house && own ? `${own.last} ailesi • ` : '') + G.place(b.id).name + (active.has(b.id) ? ' 🚨' : '');
       const w = ctx.measureText(label).width + 6 * S;
       ctx.fillStyle = 'rgba(43,29,26,0.85)'; ctx.fillRect(sx - w / 2, sy - 6 * S, w, 9 * S);
       ctx.fillStyle = '#f7ead0'; ctx.fillText(label, sx, sy + 0.8 * S);
@@ -539,42 +654,58 @@ G.render = function () {
     g.addColorStop(0, 'rgba(160,120,255,0)'); g.addColorStop(1, `rgba(120,80,220,${0.5 * a})`);
     ctx.fillStyle = g; ctx.fillRect(0, 0, G.canvas.width, G.canvas.height);
   }
-  if (G.fade > 0) { ctx.fillStyle = `rgba(0,0,0,${G.fade})`; ctx.fillRect(0, 0, G.canvas.width, G.canvas.height); }
+  if (G.fade > 0) { ctx.fillStyle = `rgba(0,0,0,${Math.min(1, G.fade)})`; ctx.fillRect(0, 0, G.canvas.width, G.canvas.height); }
+};
+
+G.npcMark = function (pid) {
+  const c = G.activeCase();
+  if (c) {
+    if (c.k.sus[pid] && !c.k.sus[pid].read) return true;
+    if (c.witness.pid === pid && !c.k.witness) return true;
+  }
+  for (const sc of Object.values(G.state.scenes)) if (!sc.closed) for (const w of sc.witnesses) if (w.pid === pid && !w.heard) return true;
+  return false;
 };
 
 G.darkness = function () {
   const h = G.state.time / 60;
-  if (h < 17.5) return 0;
-  if (h < 21) return ((h - 17.5) / 3.5) * 0.62;
-  return 0.62;
+  let a = 0;
+  if (h >= 17.5) a = h < 21 ? ((h - 17.5) / 3.5) * 0.64 : 0.64;
+  if (G.state.weather === 'rain') a = Math.max(a, 0.22);
+  return a;
 };
 
 G.renderLight = function () {
   let a = G.darkness();
   if (G.map.kind !== 'town') a *= 0.3;
+  if (G.map.secretOf) a = Math.max(a, 0.5);
   if (a <= 0.01) return;
   const L = G.lightG, S = G.S;
   const W = G.lightC.width, H = G.lightC.height;
   L.globalCompositeOperation = 'source-over';
   L.clearRect(0, 0, W, H);
-  L.fillStyle = `rgba(14,18,52,${a})`;
+  L.fillStyle = G.state.weather === 'rain' && G.darkness() < 0.3 ? `rgba(40,50,70,${a})` : `rgba(14,18,52,${a})`;
   L.fillRect(0, 0, W, H);
   L.globalCompositeOperation = 'destination-out';
-  const lights = G.map.lights.slice();
-  lights.push({ x: G.player.x, y: G.player.y - 10, r: 34 });
+  const night = G.state.time / 60 >= 18;
+  const lights = night ? G.map.lights.slice() : [];
+  lights.push({ x: G.player.x, y: G.player.y - 12, r: G.map.secretOf ? 50 : 36 });
+  if (G.map.secretOf) lights.push({ x: G.map.w * TS / 2, y: 3 * TS, r: 70 });
   for (const l of lights) {
-    const sx = (l.x - G.cam.x) * S, sy = (l.y - G.cam.y) * S, r = l.r * S;
-    if (sx < -r || sy < -r || sx > W + r || sy > H + r) continue;
-    const g = L.createRadialGradient(sx, sy, 0, sx, sy, r);
+    let lx = l.x, ly = l.y, r = l.r;
+    if (l.beacon) { lx += Math.cos(G.t * 0.8) * 120; ly += Math.sin(G.t * 0.8) * 40; r = 70; }
+    const sx = (lx - G.cam.x) * S, sy = (ly - G.cam.y) * S, rr = r * S;
+    if (sx < -rr || sy < -rr || sx > W + rr || sy > H + rr) continue;
+    const g = L.createRadialGradient(sx, sy, 0, sx, sy, rr);
     g.addColorStop(0, 'rgba(0,0,0,0.95)'); g.addColorStop(1, 'rgba(0,0,0,0)');
-    L.fillStyle = g; L.fillRect(sx - r, sy - r, r * 2, r * 2);
+    L.fillStyle = g; L.fillRect(sx - rr, sy - rr, rr * 2, rr * 2);
   }
   G.ctx.drawImage(G.lightC, 0, 0);
-  // sıcak lamba parıltısı
-  if (G.map.kind === 'town') {
+  if (G.map.kind === 'town' && night) {
     G.ctx.save();
     G.ctx.globalCompositeOperation = 'lighter';
     for (const l of G.map.lights) {
+      if (l.beacon) continue;
       const sx = (l.x - G.cam.x) * S, sy = (l.y - G.cam.y) * S, r = l.r * 0.6 * S;
       if (sx < -r || sy < -r || sx > W + r || sy > H + r) continue;
       const g = G.ctx.createRadialGradient(sx, sy, 0, sx, sy, r);
@@ -587,19 +718,27 @@ G.renderLight = function () {
 
 G.updateHud = function () {
   const st = G.state;
-  UI.setHud('h-day', `Gün ${st.day} • ${G.dayName()}`);
+  UI.setHud('h-day', `Gün ${st.day} • ${G.dayName()}${st.weather === 'rain' ? ' • yağmur' : ''}`);
   UI.setHud('h-time', U.fmt(Math.floor(st.time / 10) * 10));
   UI.setHud('h-money', '$' + st.money);
   UI.setHud('h-focus', Math.round((st.focus / st.maxFocus) * 100) + '%', 'width');
   UI.setHud('h-focus-txt', `${Math.round(st.focus)}/${st.maxFocus}`);
-  const c = st.case;
-  UI.setHud('hc-title', c && st.status !== 'closed' ? `Dava #${c.num}: ${c.title}` : 'Dava yok');
-  const nt = G.nextTask();
+  const c = G.curCase();
+  UI.setHud('hc-title', c && c.status !== 'closed' ? `Dava #${c.num}: ${c.title}` : 'Açık dava yok');
+  const nt = TALK.nextTask();
   UI.setHud('hc-task', nt ? `▸ ${nt.t} (${nt.where})` : '');
-  UI.setHud('hc-dead', c && G.active() ? `Süre: ${DATA.DAYS[(st.deadline - 1) % 7]} 24.00’e kadar (Gün ${st.deadline})` : '');
+  UI.setHud('hc-dead', c && c.status === 'active' ? `Süre: ${DATA.DAYS[(c.deadline - 1) % 7]} gece yarısı (Gün ${c.deadline})` : '');
+  const s = st.story;
+  const extra = [];
+  if (st.serial && st.serial.status === 'active' && st.serial.kills) extra.push(`☠ ${st.serial.name}: ${st.serial.kills} kurban`);
+  if (s.ch >= 2) extra.push(`Ağ: ${Object.keys(s.exposed).length}/${Object.keys(s.members).length} ifşa`);
+  UI.setHud('hc-extra', extra.join('  •  '));
+  const sus = document.getElementById('h-sus-row');
+  if (s.ch >= 3 && !s.done) { sus.classList.remove('hidden'); UI.setHud('h-sus', s.suspicion + '%', 'width'); UI.setHud('h-sus-txt', s.suspicion + '/100'); }
+  else sus.classList.add('hidden');
 };
 
-// ============================================================ Etkileşim hedefi
+// ============================================================ Etkileşim
 G.frontPoint = function (dist) {
   const p = G.player;
   const d = [[0, 1], [0, -1], [-1, 0], [1, 0]][p.dir];
@@ -610,579 +749,153 @@ G.findTarget = function () {
   if (!G.map) return null;
   const p = G.player;
   const [fx, fy, d] = G.frontPoint(12);
-  // NPC
   let best = null, bd = 13;
   for (const n of G.npcs) {
     const dist = Math.hypot(n.x - fx, n.y - 4 - fy);
     if (dist < bd) { bd = dist; best = n; }
   }
-  if (best) return { kind: 'npc', npc: best, px: best.x, py: best.y - 30 };
+  if (best) return { kind: 'npc', npc: best, px: best.x, py: best.y - 40 };
   const ftx = Math.floor(fx / TS), fty = Math.floor(fy / TS);
   const ptx = Math.floor(p.x / TS), pty = Math.floor((p.y - 3) / TS);
-  // Tezgâh arkasındaki NPC
   if (G.map.reach && G.map.reach[fty * G.map.w + ftx]) {
     const bx = ftx + d[0], by = fty + d[1];
     const n = G.npcs.find((nn) => Math.floor(nn.x / TS) === bx && Math.floor((nn.y - 3) / TS) === by);
-    if (n) return { kind: 'npc', npc: n, px: n.x, py: n.y - 30 };
+    if (n) return { kind: 'npc', npc: n, px: n.x, py: n.y - 40 };
   }
-  const c = G.state.case;
-  if (c && G.active() && G.map.id === c.scene) {
-    for (const cl of c.clues) {
-      if (G.state.k.found[cl.id] || (cl.hidden && !G.revealed)) continue;
-      if ((cl.x === ftx && cl.y === fty) || (cl.x === ptx && cl.y === pty)) return { kind: 'clue', clue: cl, px: cl.x * TS + 8, py: cl.y * TS - 6 };
+  for (const sc of Object.values(G.state.scenes)) {
+    if (sc.map !== G.map.id || sc.closed) continue;
+    for (const cl of sc.clues) {
+      if (sc.found[cl.id] || (cl.hidden && !G.revealed)) continue;
+      if ((cl.x === ftx && cl.y === fty) || (cl.x === ptx && cl.y === pty)) return { kind: 'clue', sc, clue: cl, px: cl.x * TS + 8, py: cl.y * TS - 6 };
     }
-    if (c.safe && c.safe.x === ftx && c.safe.y === fty) return { kind: 'safe', px: c.safe.x * TS + 8, py: c.safe.y * TS - 12 };
+    const onBody = (x, y) => y === sc.body[1] && (x === sc.body[0] || x === sc.body[0] + 1);
+    if (!sc.autopsy && (onBody(ftx, fty) || onBody(ptx, pty))) return { kind: 'body', sc, px: sc.body[0] * TS + 16, py: sc.body[1] * TS - 6 };
+    if (sc.safe && sc.safe.x === ftx && sc.safe.y === fty) return { kind: 'safe', sc, px: sc.safe.x * TS + 8, py: sc.safe.y * TS - 12 };
   }
   const act = G.map.acts[ftx + ',' + fty];
-  if (act) return { kind: 'act', act, px: ftx * TS + 8, py: fty * TS - 4 };
+  if (act) return { kind: 'act', act, px: ftx * TS + 8, py: fty * TS - 4, tx: ftx, ty: fty };
   return null;
 };
 
-G.interact = async function () {
+G.interact = function () {
   if (UI.busy() || G.scripting) return;
   const t = G.findTarget();
   if (!t) return;
-  G.scripting = true;
-  try {
+  G.runScript(async () => {
     if (t.kind === 'npc') {
       const n = t.npc;
       n.dir = Math.abs(G.player.x - n.x) > Math.abs(G.player.y - n.y) ? (G.player.x < n.x ? 2 : 3) : (G.player.y < n.y ? 1 : 0);
-      if (n.wander) { n.wander.tx = null; n.wander.t = 4; n.moving = false; }
-      await G.talk(n);
-    } else if (t.kind === 'clue') await G.pickClue(t.clue);
-    else if (t.kind === 'safe') await G.openSafe();
-    else if (t.kind === 'act') await G.useAct(t.act);
-  } catch (e) { console.error(e); }
-  G.scripting = false;
-  G.save();
+      if (n.wander) { n.wander.tx = null; n.wander.t = 5; n.moving = false; }
+      await TALK.talk(n);
+    } else if (t.kind === 'clue') await TALK.pickClue(t.sc, t.clue);
+    else if (t.kind === 'body') await TALK.searchBody(t.sc);
+    else if (t.kind === 'safe') await TALK.openSafe(t.sc);
+    else if (t.kind === 'act') await TALK.useAct(t.act, t);
+  });
 };
 
-// ============================================================ Gözlem (Q)
 G.observe = function () {
   if (UI.busy() || G.scripting) return;
-  const c = G.state.case;
-  if (c && G.active() && G.map.id === c.scene) {
-    const hiddenLeft = c.clues.filter((cl) => cl.hidden && !G.state.k.found[cl.id]);
-    if (G.revealed) { UI.toast('Gözlem zaten açık. Mor parıltılara bak.'); return; }
-    if (!hiddenLeft.length) { UI.toast('Jade odayı süzüyor: “Burada gözden kaçan bir şey kalmadı.”'); return; }
+  const st = G.state;
+  const hiddenScene = Object.values(st.scenes).some((sc) => sc.map === G.map.id && !sc.closed && sc.clues.some((cl) => cl.hidden && !sc.found[cl.id]));
+  const secret = G.map.kind === 'interior' && st.secrets[G.map.id];
+  if (G.revealed) { UI.toast('Gözlem zaten açık. Mor parıltılara bak.'); return; }
+  if (hiddenScene || G.map.kind === 'interior') {
     if (!G.useFocus(10)) return;
     G.revealed = true; G.observeFx = 1.2; SFX.focus();
-    UI.toast(`Gözlem: ${hiddenLeft.length} gizli ayrıntı belirdi! (−10 odak)`, 'good');
+    if (hiddenScene || secret) UI.toast('Gözlem: gizli ayrıntılar parıldıyor! (−10 odak)', 'good');
+    else UI.toast('Jade odayı dikkatle süzüyor... Burada saklı bir şey yok. (−10 odak)');
     return;
   }
   G.observeFx = 0.6;
   UI.toast('Jade etrafı süzüyor: “' + DATA.JADE_QUIPS[Math.floor(Math.random() * DATA.JADE_QUIPS.length)] + '”');
 };
 
-// ============================================================ Konuşmalar
-G.talk = async function (n) {
-  const id = n.id;
-  const who = { name: n.name, spec: n.spec };
-  if (id === 'boss') return G.talkBoss(who);
-  if (id === 'grace') return G.talkGrace(who);
-  if (id === 'kevin') return G.talkKevin(who);
-  if (id === 'ray') return G.talkRay(who);
-  if (id === 'ortiz') return G.talkOrtiz(who);
-  if (id === 'sam') return G.talkSam(who);
-  if (id === 'mia' || id === 'hector' || id === 'lou') return G.talkWitness(id, who);
-  if (id === 'cop') return UI.say(who, G.state.k.found && Object.keys(G.state.k.found).length ? 'Kimse bir şeye dokunmadı, Bay Jade. Sizin dışınızda tabii.' : 'Olay yerini korudum, Bay Jade. Cesedi sabah götürdüler; tebeşir izi orada. Gerisi sizde.');
-  if (id === 'neighbor') return G.talkNeighbor(who);
-  if (id.startsWith('sus:')) return G.talkSuspect(G.sus(id.slice(4)), who);
-  if (id.startsWith('walker:')) {
-    const w = DATA.WALKERS[+id.split(':')[1]];
-    return UI.say(who, w.lines[Math.floor(Math.random() * w.lines.length)]);
-  }
-};
-
-G.talkBoss = async function (who) {
-  const st = G.state, c = st.case;
-  if (!c || st.status === 'closed') {
-    return UI.say(who, 'Bugünlük iş yok, Jade. Git kanepende uyu; yarın sabah masamda yeni bir dosya olur, eminim.');
-  }
-  if (st.status === 'pending') return G.briefing(who);
-  for (;;) {
-    const i = await UI.choose(who, 'Evet, Jade? Bir şey bulduysan söyle.', [
-      'Katili buldum. (Suçlama yap)',
-      'Davayı bir daha özetler misin?',
-      'Şüpheliler nerede?',
-      'Hiç. Sadece seni görmeye geldim.',
-    ]);
-    if (i === 0) { await G.accuse(who); return; }
-    if (i === 1) await G.caseSummary(who);
-    if (i === 2) {
-      for (const s of c.suspects) await UI.say(who, `${s.name} (kurbanın ${s.relation}): ${G.place(s.loc).name}.`);
-    }
-    if (i === 3) { await UI.say(who, 'Çok tatlı. Şimdi git ve işini yap.'); return; }
-  }
-};
-
-G.caseSummary = async function (who) {
-  const c = G.state.case;
-  await UI.say(who, `Kurban: ${c.victim.name}, ${c.victim.job}. Cesedi bu sabah saat 06.00’da ${c.finder} bulmuş. Olay yeri: ${G.place(c.scene).name}.`);
-};
-
-G.briefing = async function (who) {
-  const st = G.state, c = st.case;
-  const jade = G.cast('jade');
-  await UI.say(who, 'Jade, nihayet. Çayını sonra içersin. Yeni bir davamız var.');
-  await G.caseSummary(who);
-  await UI.say(who, 'Dört kişi öne çıkıyor. Hepsinin bir sebebi var gibi:');
-  for (const s of c.suspects) await UI.say(who, `${s.name}: kurbanın ${s.relation}. Şu an ${G.place(s.loc).name} civarında.`);
-  await UI.say(who, 'Olay yerine git, Dr. Ortiz’in otopsi bulgularına bak, şüphelilerle konuş. Ve lütfen... kimseyi hipnotize etme.');
-  await UI.say(jade, 'Söz veremem ama elimden geleni yaparım. Ki bu genelde fazlasıdır.');
-  st.status = 'active';
-  st.deadline = st.day + 2;
-  await UI.say(who, `${DATA.DAYS[(st.deadline - 1) % 7]} gece yarısına kadar vaktin var. Katili bulunca bana gel; katili, yöntemi ve motifi söyleyeceksin.`);
-  G.addEvidence('brief', 'Dava özeti', `Kurban ${c.victim.name} (${c.victim.job}). Ceset sabah 06.00’da ${c.finder} tarafından bulundu. Olay yeri: ${G.place(c.scene).name}. Şüpheliler: ${c.suspects.map((s) => `${s.name} (${s.relation})`).join(', ')}.`, true);
-  UI.toast(`Yeni dava: ${c.title}`, 'good');
-  SFX.good();
-  G.npcs = G.npcsFor(G.map.id);
-};
-
-G.talkGrace = async function (who) {
-  const st = G.state, c = st.case, k = st.k;
-  if (!c || !G.active()) return UI.say(who, 'Sistem sakin. Dava gelince her şeyi tarayabilirim; banka, sabıka, araç kayıtları... Sen söyle, ben bulayım.');
-  const todo = c.suspects.filter((s) => k.sus[s.id].met && !k.sus[s.id].bg);
-  const unmet = c.suspects.filter((s) => !k.sus[s.id].met).length;
-  if (!todo.length) {
-    if (unmet) return UI.say(who, `Taramak için önce şüphelilerle tanışman lazım; tam isim, doğum tarihi falan. Daha ${unmet} kişiyle konuşmadın.`);
-    return UI.say(who, 'Herkesi taradım. Ayakkabı numaraları ve araçlar dosyanda. Gerisi senin o tuhaf beyninde.');
-  }
-  const opts = todo.map((s) => `${s.name} (30 dk)`);
-  if (todo.length > 1) opts.push(`Hepsini tara (${todo.length * 30} dk)`);
-  opts.push('Sonra.');
-  const i = await UI.choose(who, 'Kimi tarayayım? Ayakkabı numarası, araç kaydı, mali durum; ne varsa.', opts);
-  let list = [];
-  if (i < todo.length) list = [todo[i]];
-  else if (todo.length > 1 && i === todo.length) list = todo;
-  for (const s of list) {
-    G.advance(30);
-    k.sus[s.id].bg = true;
-    const extra = ['Sabıka kaydı temiz.', 'Birkaç ödenmemiş park cezası var.', 'Kredi kartı borçları yüksek.', 'On yıl önce bir kavga yüzünden gözaltı kaydı var.', 'Geçen yıl bir şirket kurmuş, batmış.', 'Son ayda hesabından büyük para çekilmiş.'][(s.name.length + c.seed) % 6];
-    const txt = `Ayakkabı: ${s.attrs.shoe} numara. Kayıtlı araç: ${s.attrs.vehicle}. ${extra}`;
-    G.addEvidence('bg_' + s.id, 'Geçmiş taraması: ' + s.name, txt, true);
-    await UI.say(who, `${s.name}: ${txt}`);
-  }
-  if (list.length) UI.toast('Geçmiş tarama sonuçları dosyaya eklendi.', 'good');
-};
-
-G.talkKevin = async function (who) {
-  const nt = G.nextTask();
-  const st = G.state;
-  if (st.status === 'pending') return UI.say(who, 'Şef seni bekliyor. Ofisinde. Ben olsam acele ederdim.');
-  if (!nt || st.status === 'closed') return UI.say(who, 'İyi iş çıkardın. Yarın yine görürüz.');
-  const lines = [
-    `Ben olsam şuna bakardım: ${nt.t}. Yer: ${nt.where}.`,
-    nt.hint || 'Olay yerindeki izleri şüphelilerin özellikleriyle tek tek karşılaştır. Biri hepsine uymuyorsa, o değildir.',
-  ];
-  await UI.lines(who, lines);
-};
-
-G.talkRay = async function (who) {
-  const tips = [
-    'Şüphelileri sorguda “okuyunca” elini, sigarasını, parfümünü öğreniyorsun. Grace de ayakkabı numarasını ve aracını bulur.',
-    'Olay yerinde bir şey bulamıyorsan Q’ya bas. Senin o “gözlem” numaran işe yarıyor, kabul.',
-    'Mazeretleri kafe, otel ve bardakilere sor. Ama önce şüpheliye nerede olduğunu sorman lazım.',
-    'Kafede Mia’nın çayları odağını tazeler. Karakolun mutfağında da çay var, bedava!',
-    'Çok geç kalma. Geçen sefer gece ikide seni kanepeye ben taşıdım.',
-    'Herkes bir şey saklar, Jade. Ama herkes katil değildir.',
-  ];
-  await UI.say(who, tips[Math.floor(Math.random() * tips.length)]);
-};
-
-G.talkOrtiz = async function (who) {
-  const st = G.state, c = st.case, k = st.k;
-  if (!c || !G.active()) return UI.say(who, 'Bugün morg sessiz. Bu iyiye işaret, değil mi?');
-  if (k.autopsy) {
-    const a = k.evidence.find((e) => e.id === 'autopsy');
-    return UI.say(who, 'Raporum dosyanda: ' + (a ? a.text : ''));
-  }
-  const M = DATA.METHODS[c.method];
-  await UI.say(who, 'Jade. Cesedi inceledim. Ama önce senin ne düşündüğünü duymak istiyorum; ne de olsa her şeyi bilen sensin.');
-  const r = U.rng(c.seed + 5);
-  const wrong = r.shuffle(DATA.METHOD_KEYS.filter((m) => m !== c.method)).slice(0, 2);
-  const opts = r.shuffle([c.method].concat(wrong));
-  for (;;) {
-    const i = await UI.choose(who, `Bulgular: ${M.findings} Sence ölüm nedeni ne?`, opts.map((m) => DATA.METHODS[m].label));
-    G.advance(10);
-    if (opts[i] === c.method) break;
-    G.state.focus = Math.max(0, G.state.focus - 5);
-    SFX.bad();
-    await UI.say(who, 'Hayır. Bulgulara bir daha bak; hepsi bir şey söylüyor. (−5 odak)');
-  }
-  await UI.say(who, 'Doğru. Şimdi ölüm saati.');
-  const h = c.tod;
-  const wins = r.shuffle([h - 2, h, h + 2]);
-  for (;;) {
-    const i = await UI.choose(who, `Ceset sabah 06.00’da bulundu. Vücut ısısı ${c.bodyTemp.toFixed(1).replace('.', ',')}°C idi. Normali 37°C; bu koşullarda ceset saatte yaklaşık 1°C soğur. Ölüm hangi aralıkta?`,
-      wins.map((w) => `${U.hm(w)} – ${U.hm(w + 1)}`));
-    G.advance(10);
-    if (wins[i] === h) break;
-    G.state.focus = Math.max(0, G.state.focus - 5);
-    SFX.bad();
-    await UI.say(who, 'Tutmuyor. 37’den çıkar, saat başına bir derece... Geriye doğru say. (−5 odak)');
-  }
-  const handNote = c.sceneAttrs.includes('hand') ? ' ' + M.handText(c.culpritVals.hand === 'sol') : (M.hand ? ' Saldırganın hangi elini kullandığını kestiremiyorum.' : '');
-  const text = `Ölüm nedeni: ${M.label}. Ölüm saati: ${U.hm(h)} – ${U.hm(h + 1)}.${handNote} Olası silah/yöntem: ${c.weapon}.`;
-  await UI.say(who, 'Mükemmel. ' + text);
-  k.autopsy = true;
-  G.advance(25);
-  G.addEvidence('autopsy', 'Otopsi raporu', text);
-  SFX.good();
-};
-
-G.talkSam = async function (who) {
-  const c = G.state.case, k = G.state.k;
-  if (!c || !G.active() || !c.feats.print) return UI.say(who, 'Mikroskobum hazır. Ama bu davada bana getirebileceğin bir iz yok gibi.');
-  if (!k.found.print) return UI.say(who, 'Olay yerinden bir parmak izi getirirsen, şüphelilerin kayıtlı izleriyle karşılaştırırız.');
-  if (k.print) return UI.say(who, 'Parmak izi sonucu dosyanda. Kısmi iz iki kişiye uyuyordu, hatırlarsın.');
-  await UI.say(who, 'Kadehteki iz kısmi; tek başına kimseyi göstermez. Şüphelilerin kayıtlı izlerinde bu deseni arayalım. Hepsini bulmalısın, çünkü bu desen birden fazla kişide olabilir.');
-  const ok = await MINI.fingerprint(c);
-  G.advance(30);
-  if (ok) {
-    k.print = true;
-    const names = c.print.matches.map((id) => G.sus(id).name).join(' ve ');
-    G.addEvidence('print', 'Parmak izi analizi', `Kadehteki kısmi iz şu kişilerin kayıtlı izleriyle uyumlu: ${names}. (Kısmi iz olduğundan ikisi de mümkün.)`);
-    SFX.good();
-    await UI.say(who, `Tamamdır: ${names}. İkisinden biri o kadehe dokunmuş.`);
-  } else await UI.say(who, 'Sonra tekrar bakalım. İz bir yere kaçmıyor.');
-};
-
-G.witnessShop = {
-  mia: [{ label: 'Bergamot çayı', price: 6, focus: 30 }, { label: 'Limonlu kurabiye', price: 3, focus: 12 }],
-  lou: [{ label: 'Zencefilli gazoz', price: 4, focus: 16 }],
-  hector: [],
-};
-G.witnessGreet = {
-  mia: 'Jade! Her zamanki bergamot mu? Yoksa yine birilerini mi soruyorsun?',
-  hector: 'Grand Palmiye’ye hoş geldiniz, efendim. Misafir defterimiz her zaman polise açıktır... şey, danışmana da.',
-  lou: 'Danışman! Sert bir şey mi, yoksa yine soru mu?',
-};
-
-G.talkWitness = async function (id, who) {
-  const place = { mia: 'cafe', hector: 'hotel', lou: 'bar' }[id];
-  for (;;) {
-    const st = G.state, c = st.case, k = st.k;
-    const ask = c && G.active() ? c.suspects.filter((s) => s.alibi.place === place && k.sus[s.id].alibi && !k.sus[s.id].checked) : [];
-    const opts = [];
-    for (const it of G.witnessShop[id]) opts.push({ label: `${it.label} ($${it.price}, +${it.focus} odak)`, it });
-    for (const s of ask) opts.push({ label: `${s.name} o gece burada mıydı?`, s });
-    opts.push({ label: 'Hoşça kal.' });
-    const i = await UI.choose(who, G.witnessGreet[id], opts);
-    const o = opts[i];
-    if (o.it) {
-      if (st.money < o.it.price) { SFX.bad(); await UI.say(who, 'Hesabı karakola mı yazayım? Şaka şaka... ama paran yetmiyor.'); continue; }
-      st.money -= o.it.price; G.gainFocus(o.it.focus); G.advance(10); SFX.good();
-      await UI.say(null, `Jade ${o.it.label.toLowerCase()} keyfini çıkarıyor. (+${o.it.focus} odak)`);
-      continue;
-    }
-    if (o.s) {
-      G.advance(10);
-      const s = o.s;
-      k.sus[s.id].checked = true;
-      await UI.say(who, s.alibi.truth);
-      G.addEvidence('alibi_' + s.id, 'Mazeret kontrolü: ' + s.name, `${G.place(place).name} çalışanı: “${s.alibi.truth}”`);
-      continue;
-    }
-    return;
-  }
-};
-
-G.talkNeighbor = async function (who) {
-  const c = G.state.case, k = G.state.k;
-  await UI.say(who, 'Siz polis misiniz? Ah, danışman. Neyse, birine anlatmam lazımdı.');
-  await UI.say(who, c.neighbor.text);
-  if (!k.neighbor) {
-    k.neighbor = true;
-    G.advance(10);
-    G.addEvidence('neighbor', 'Komşunun ifadesi', c.neighbor.text);
-  }
-};
-
-G.talkSuspect = async function (s, who) {
-  const k = G.state.k, ks = k.sus[s.id];
-  const jade = G.cast('jade');
-  if (!ks.met) {
-    ks.met = true;
-    await UI.say(who, `${s.name}. Kurbanın ${s.relation}. Siz de... polis misiniz?`);
-    await UI.say(jade, 'Danışmanım. Polisler daha sıkıcı. Birkaç sorum olacak.');
-    G.addEvidence('met_' + s.id, 'Tanıştın: ' + s.name, `Kurbanın ${s.relation}. Bulunduğu yer: ${G.place(s.loc).name}. Saç: ${s.attrs.hair}.`, true);
-  }
-  for (;;) {
-    const opts = [
-      { label: (ks.motive ? '✓ ' : '') + 'Kurbanla aranız nasıldı?' },
-      { label: (ks.alibi ? '✓ ' : '') + 'Olay gecesi neredeydiniz?' },
-      { label: (ks.gossip ? '✓ ' : '') + 'Sizce bunu kim yapmış olabilir?' },
-      { label: ks.read ? '✓ Onu zaten okudun' : '[Gözlem • 15 odak] Onu oku', disabled: ks.read },
-      { label: 'Şimdilik bu kadar.' },
-    ];
-    const i = await UI.choose(who, 'Başka?', opts);
-    if (i === 0) {
-      G.advance(10);
-      await UI.say(who, DATA.MOTIVES[s.motive].say);
-      if (!ks.motive) { ks.motive = true; G.addEvidence('mot_' + s.id, 'İfade: ' + s.name, `Kurbanla ilişkisi hakkında: “${DATA.MOTIVES[s.motive].say}”`, true); }
-    } else if (i === 1) {
-      G.advance(10);
-      await UI.say(who, s.alibi.claim);
-      if (!ks.alibi) { ks.alibi = true; G.addEvidence('ali_' + s.id, 'Mazeret: ' + s.name, `“${s.alibi.claim}”`, true); }
-    } else if (i === 2) {
-      G.advance(10);
-      const t = G.sus(s.gossipAbout);
-      const line = DATA.MOTIVES[t.motive].gossip(t.name);
-      await UI.say(who, line);
-      if (!ks.gossip) { ks.gossip = true; k.sus[t.id].heard.push(`${s.name}: “${line}”`); }
-    } else if (i === 3) {
-      await G.coldRead(s, who);
-    } else return;
-  }
-};
-
-G.coldRead = async function (s, who) {
-  const k = G.state.k, ks = k.sus[s.id];
-  if (!G.useFocus(15)) return;
-  SFX.focus(); G.observeFx = 1;
-  G.advance(15);
-  const a = s.attrs;
-  const handTxt = a.hand === 'sol' ? 'Bardağı SOL eliyle tutuyor; not alırken de sol elini kullanıyor. Solak.' : 'Bardağı sağ eliyle tutuyor, imza atarken de sağını kullanıyor.';
-  const smokeTxt = a.smoke === DATA.ATTRS.smoke.none ? 'Parmaklarında sigara sarısı yok, üstü sigara kokmuyor: içmiyor.' : `Ceket cebinden bir paket ${a.smoke} görünüyor.`;
-  const scentTxt = a.scent === DATA.ATTRS.scent.none ? 'Belirgin bir parfüm kokusu yok.' : `Üzerinden hafif bir ${a.scent} kokusu geliyor.`;
-  await UI.say(null, `Jade, ${s.first} adlı şüpheliyi dikkatle süzüyor...`);
-  await UI.lines(null, [handTxt, smokeTxt, scentTxt]);
-  ks.read = true;
-  G.addEvidence('obs_' + s.id, 'Gözlem: ' + s.name, `${handTxt} ${smokeTxt} ${scentTxt}`, true);
-  UI.toast(`${s.name}: el, sigara ve koku bilgileri dosyaya eklendi.`, 'good');
-  const rd = s.read;
-  await UI.say(null, 'Jade bir ayrıntı daha fark ediyor: ' + rd.obs);
-  const r = U.rng(G.state.case.seed + s.id.charCodeAt(1));
-  const opts = r.shuffle([rd.right].concat(rd.wrong));
-  const i = await UI.choose(G.cast('jade'), '(İçinden) Bu ne anlama geliyor?', opts);
-  if (opts[i] === rd.right) {
-    ks.readOk = true;
-    SFX.good();
-    await UI.say(G.cast('jade'), `${rd.right}... Değil mi? Yüzünüzden okunuyor.`);
-    await UI.say(who, rd.secret);
-    let txt = `“${rd.secret}”`;
-    if (rd.altAlibi && rd.alt) { await UI.say(who, rd.alt); txt += ` Gerçek mazereti: “${rd.alt}”`; }
-    G.addEvidence('read_' + s.id, (rd.trace ? 'İtiraf: ' : 'Sır: ') + s.name, (rd.trace ? 'Olay yerine gittiğini kabul etti. ' : '') + txt);
-    G.gainFocus(5);
-  } else {
-    SFX.bad();
-    await UI.say(G.cast('jade'), `${opts[i]}... Değil mi?`);
-    await UI.say(who, 'Ne? Saçmalık. Bence fazla televizyon izliyorsunuz.');
-    await UI.say(null, 'Yanlış okuma. Şüpheli savunmaya geçti; bu konuda daha fazla bir şey söylemeyecek.');
-  }
-};
-
-// ============================================================ Olay yeri
-G.sceneArrival = async function () {
-  if (UI.busy()) return;
-  G.scripting = true;
-  const c = G.state.case;
-  await UI.say(null, `${G.place(c.scene).name}. Olay yeri bantlarla çevrili. Yerdeki parıltılara yaklaşıp E ile incele.`);
-  await UI.say(G.cast('jade'), 'Gözle görülenler başlangıç. Asıl ilginç olanlar saklananlardır. (Q: Gözlem)');
-  G.scripting = false;
-};
-
-G.pickClue = async function (cl) {
-  const k = G.state.k, c = G.state.case;
-  k.found[cl.id] = true;
-  SFX.clue();
-  G.advance(5);
-  await UI.say(null, `${cl.title}: ${cl.text}`);
-  G.addEvidence('clue_' + cl.id, cl.title, cl.text);
-  if (cl.id === 'cipher') {
-    const i = await UI.choose(G.cast('jade'), 'Kaydırma şifresi... Şimdi çözmeye çalışayım mı?', ['Evet, hemen bakalım.', 'Sonra (Dosya → Deliller).']);
-    if (i === 0) await G.solveCipher();
-  }
-  if (c.clues.every((x) => k.found[x.id])) { UI.toast('Olay yerindeki tüm ipuçlarını buldun!', 'good'); SFX.good(); }
-};
-
-G.solveCipher = async function () {
-  const c = G.state.case, k = G.state.k;
-  if (k.cipher) return;
-  const ok = await MINI.cipher(c);
-  G.advance(20);
-  if (ok) {
-    k.cipher = true;
-    G.addEvidence('cipher_done', 'Çözülen not', `“${c.cipher.plain}” Notu imzalayan kişinin adı ${c.cipher.initial} harfiyle başlıyor.`);
-    SFX.good();
-    await UI.say(G.cast('jade'), `“-${c.cipher.initial}.” Katil kurbanı buluşmaya çağırmış. Adı ${c.cipher.initial} ile başlayan biri...`);
-  }
-};
-
-G.openSafe = async function () {
-  const c = G.state.case, k = G.state.k;
-  if (k.safe) return UI.say(null, 'Kasa açık ve boş. İçindeki defter artık dosyanda.');
-  await UI.say(null, 'Duvara gömülü küçük bir kasa. Kurbanın masasında, kasa şifresine dair karalamalar olan bir not kâğıdı var.');
-  const ok = await MINI.safe(c);
-  G.advance(20);
-  if (ok) {
-    k.safe = true;
-    SFX.good();
-    const txt = c.safe.doc.map((d) => '• ' + d).join(' ');
-    await UI.say(null, 'Klik! Kasa açıldı. İçinde kurbanın gizli defteri var. Son sayfada:');
-    for (const d of c.safe.doc) await UI.say(null, '“' + d + '”');
-    G.addEvidence('safe', 'Kurbanın gizli defteri', txt);
-  }
-};
-
-// ============================================================ Mekân eylemleri
-G.useAct = async function (act) {
-  const st = G.state;
-  if (act === 'car') return G.drive();
-  if (act === 'couch') return G.couch();
-  if (act === 'tea') {
-    if (st.tea >= 2) return UI.say(G.cast('jade'), 'Bugün yeterince çay içtim. Sanırım. Hayır, aslında asla yeterli değil... ama demlik boş.');
-    st.tea++; G.gainFocus(20); G.advance(15); SFX.good();
-    return UI.say(null, 'Jade kendine özenle bir fincan çay demliyor. Fincan, tabak, tam üç dakika demleme. (+20 odak)');
-  }
-  if (act === 'board') {
-    const i = await UI.choose(null, 'Delil panosu: kırmızı ipler, fotoğraflar, notlar.', ['Dava dosyasını aç', 'Vazgeç']);
-    if (i === 0) DOSSIER.open('suspects');
-    return;
-  }
-  if (act === 'computer') return G.talkGrace(G.cast('grace'));
-  if (act === 'autopsy') return G.talkOrtiz(G.cast('ortiz'));
-  if (act === 'printlab') return G.talkSam(G.cast('sam'));
-};
-
-G.drive = async function () {
-  const dests = WORLD.BUILDINGS.map((b) => b.id);
-  const c = G.state.case;
-  const opts = dests.map((id) => G.place(id).name + (c && G.active() && c.scene === id ? ' (olay yeri)' : '') + (c && G.active() && c.suspects.some((s) => s.loc === id) ? ' (şüpheli)' : ''));
-  opts.push('Vazgeç');
-  const i = await UI.choose(G.cast('jade'), 'Eski dostum. Nereye gidiyoruz? (20 dk)', opts);
-  if (i >= dests.length) return;
-  const b = WORLD.building(dests[i]);
-  G.advance(20);
-  G.enterMap('town', b.door.x, b.door.y + 1, 1);
-};
-
-G.couch = async function () {
-  const st = G.state;
-  const night = st.time >= 20 * 60;
-  const opts = [];
-  if (night) opts.push('Uyu (günü bitir)');
-  opts.push('Kısa bir şekerleme (2 saat, +40 odak)');
-  opts.push('Vazgeç');
-  const i = await UI.choose(null, night ? 'Jade’in emektar deri kanepesi. Gece oldu.' : 'Jade’in emektar deri kanepesi.', opts);
-  const label = opts[i];
-  if (label.startsWith('Uyu')) return G.newDay(false);
-  if (label.startsWith('Kısa')) {
-    G.fade = 1; G.advance(120); G.gainFocus(40); SFX.good();
-    return UI.say(null, 'Jade gözlerini kapatıyor... ve iki saat sonra, zihni berrak, uyanıyor. (+40 odak)');
-  }
-};
-
 // ============================================================ Gün geçişi
-G.faint = function () {
-  if (G.fainting) return;
-  G.fainting = true;
-  G.state.money = Math.max(0, G.state.money - 15);
-  G.newDay(true).then(() => { G.fainting = false; });
-};
-
 G.newDay = async function (fainted) {
   const st = G.state;
-  G.scripting = true;
   st.day += 1;
   st.time = 8 * 60;
   st.tea = 0;
   st.focus = fainted ? Math.round(st.maxFocus * 0.6) : st.maxFocus;
+  st.weather = U.hrand(st.seed, st.day, 'w') < 0.22 ? 'rain' : 'clear';
+  if (fainted) st.money = Math.max(0, st.money - 15);
   const sp = WORLD.INTERIORS.station.spawn;
+  // Jade karakolda uyuduysa o saatler mazeret günlüğüne yazılır
+  if (!fainted) {
+    const startAbs = (st.day - 2) * 1440 + (G.lastSleepAt || 22 * 60);
+    for (let a = startAbs; a < (st.day - 2) * 1440 + 26 * 60; a += 30) st.jlog[Math.floor(a / 30)] = 'station';
+  }
+  UI.dlg = null; UI.renderDlg();
+  const news = [];
+  STORY.night(st, news);
+  const s = st.story;
+  let arrested = false;
+  if (s.ch >= 3 && s.suspicion >= 100 && !s.done) {
+    arrested = true;
+    s.arrests += 1;
+    st.day += 1;
+    s.suspicion = 55;
+    st.rep = Math.max(0, st.rep - 3);
+    st.money = Math.max(0, st.money - 40);
+  }
   G.enterMap('station', sp[0], sp[1], 0);
   G.fade = 1.5;
-  UI.dlg = null; UI.renderDlg();
   await UI.say(null, fainted
-    ? `Jade gece yorgunluktan bayıldı. Ray onu karakoldaki kanepeye taşıdı ve taksi parasını cüzdanından aldı (−$15). Gün ${st.day} • ${G.dayName()}.`
-    : `Jade kanepesinde derin bir uykuya dalıyor... Gün ${st.day} • ${G.dayName()}, sabah 08.00.`);
-  if (st.status === 'active' && st.day > st.deadline) {
-    const c = st.case;
-    st.failed += 1;
-    st.rep = Math.max(0, st.rep - 2);
-    const culprit = c.suspects.find((s) => s.role === 'C');
-    st.history.push({ num: c.num, title: c.title, stars: 0, result: 'Zaman aşımı', culprit: culprit.name, day: st.day });
-    st.status = 'closed';
-    SFX.bad();
-    await UI.say(G.cast('boss'), `Jade. ${c.title} dosyası başsavcılığa gitti; süremiz doldu. Dava faili meçhul kaldı. Bu iyi olmadı. (İtibar −2)`);
-    await UI.say(null, `(Sonradan anlaşıldı ki katil ${culprit.name} idi.)`);
+    ? `Jade gece yorgunluktan bayıldı. Ray onu karakoldaki kanepeye taşıdı (−$15). Gün ${st.day} • ${G.dayName()}.`
+    : `Jade kanepesinde derin bir uykuya dalıyor... Gün ${st.day} • ${G.dayName()}, sabah 08.00.${st.weather === 'rain' ? ' Dışarıda yağmur var.' : ''}`);
+  if (arrested) {
+    await UI.interlude([['Yellow Bea', 'Aslan', 'Lion Lion. Danışman hücrede. Söylemiştim.'], ['Aslan', 'Yellow Bea', 'Lion Lion. Bir gün. Avukatları onu yarın çıkarır. Yeterince zaman kazandık.']]);
+    await UI.say(G.cast('boss'), 'Jade... Seni bir gün nezarethanede tuttular. FBI İç İşler elindeki delillerle seni suçladı. Kefaletini ben ödedim (−$40, İtibar −3). Biri seni çok profesyonelce tuzağa düşürüyor. Adını temize çıkar!');
   }
-  if (st.status === 'closed' || !st.case) {
-    G.newCase();
-    await UI.say(G.cast('boss'), 'Jade! Masamda yeni bir dosya var. Ofisime gel.');
+  const c = G.curCase();
+  if (c && c.status === 'active' && st.day > c.deadline) {
+    c.status = 'closed';
+    st.failed += 1; st.rep = Math.max(0, st.rep - 2);
+    const C = POP.get(c.culprit);
+    st.history.push({ num: c.num, title: c.title, stars: 0, result: 'Zaman aşımı', culprit: C.name, day: st.day });
+    G.closeScene(c.sceneId);
+    SFX.bad();
+    await UI.say(G.cast('boss'), `${c.title} dosyası başsavcılığa gitti; süremiz doldu. (İtibar −2) Sonradan anlaşıldı ki katil ${C.name} idi.`);
+  }
+  for (const n of news) {
+    const sc = n.scene && st.scenes[n.scene];
+    if (n.kind === 'serial') {
+      const v = POP.get(sc.victim);
+      SFX.bad();
+      await UI.say(G.cast('boss'), `Jade, kötü haber. ${st.serial.name} yine vurdu. Kurban: ${v.name} (${v.job}). Yer: ${G.place(sc.place).name}. Bu ${st.serial.kills}. kurban.`);
+      G.addEvidence('serial', 'sk_' + sc.id, `${st.serial.kills}. kurban: ${v.name}`, `${v.name} (${v.age}, ${v.job}) — ${G.place(sc.place).name}. Ölüm gece ${U.hm(sc.tod % 24)} civarı.`, true);
+      if (st.serial.kills === 2) G.addEvidence('serial', 'sk_pattern', 'Kurbanlar arasındaki ortak nokta', st.serial.pattern.text);
+      if (s.ch >= 2 && U.hrand(st.seed, st.day, 'il') < 0.6) { const ags = STORY.agents(); const a = ags[st.day % ags.length]; await STORY.interlude('body', { A: STORY.codeOf(a), B: STORY.codeOf(s.members[a].boss) }); }
+    }
+    if (n.kind === 'serialEscaped') {
+      st.failed += 1; st.rep = Math.max(0, st.rep - 4);
+      const K = POP.get(st.serial.killer); K.gone = true; G.popState(K.id).gone = true;
+      await UI.say(G.cast('boss'), `${st.serial.name} altıncı kurbandan sonra kasabadan kayboldu. (İtibar −4) Dosyalara göre katil ${K.name} idi.`);
+    }
+    if (n.kind === 'frame') {
+      const v = POP.get(sc.victim);
+      const fr = s.frames[s.frames.length - 1];
+      const fdef = DATA.FRAMES.find((f) => f.id === fr.fdef);
+      SFX.bad();
+      if (!s.seen.frame) await STORY.interlude('frame', { B: STORY.codeOf(s.members[fr.agent].boss) });
+      await UI.say(G.cast('boss'), `Jade... ${v.name} dün gece öldürüldü: ${G.place(sc.place).name}. Olay yerinde seni gösteren bir şey var: ${fdef.title.toLowerCase()}. FBI İç İşler seni sorgulamak istiyor. (Şüphe: ${s.suspicion}/100)`);
+      await UI.say(G.cast('jade'), `Ölüm saati ${U.hm(fr.tod % 24)} civarı. O saatte beni gören birini bulmalıyım. Ya da bu sahte delili çürütmeliyim.`);
+      G.addEvidence('frame', 'fr_' + fr.id, 'Tuzak: ' + v.name, `${fdef.text} Ölüm saati: Gün ${fr.day}, ${U.hm(fr.tod % 24)}. Mazeret için o saatte seni gören birine sor ya da delili delil panosunda analiz et.`);
+    }
+  }
+  if (!G.activeCase() && !(G.curCase() && G.curCase().status === 'pending')) {
+    const agentNext = s.ch === 1 && st.solved >= 1 && !s.codeKnown;
+    const ag2 = s.ch >= 3 && !s.flags.net2 && STORY.agents().find((a) => !s.exposed[a] && CASES.eligible(POP.get(a)));
+    if (agentNext) G.newStandardCase({ agent: STORY.agents()[0] });
+    else if (ag2 && U.hrand(st.seed, st.day, 'n2') < 0.5) { G.newStandardCase({ agent: ag2 }); s.flags.net2 = true; }
+    else G.newStandardCase();
+    if (G.curCase() && G.curCase().status === 'pending') await UI.say(G.cast('boss'), 'Bir de masamda yeni bir dosya var. Ofisime gel.');
   }
   G.npcs = G.npcsFor(G.map.id);
   G.save();
-  G.scripting = false;
 };
 
-// ============================================================ Suçlama
-G.accuse = async function (who) {
-  const st = G.state, c = st.case, k = st.k;
-  const res = await MINI.accuse(c, k);
-  if (!res) { await UI.say(who, 'Emin olduğunda gel. Yanlış kişiyi suçlarsak başımız yanar.'); return; }
-  G.advance(30);
-  const culprit = c.suspects.find((s) => s.role === 'C');
-  const accused = G.sus(res.suspect);
-  const jade = G.cast('jade');
-  if (accused.id !== culprit.id) {
-    k.wrong += 1;
-    st.rep = Math.max(0, st.rep - 1);
-    SFX.bad();
-    await UI.say(G.cast('jade'), `Katil... ${accused.name}!`);
-    await UI.say({ name: accused.name, spec: accused.spec }, 'Ne?! Avukatımı istiyorum. Hemen!');
-    if (k.wrong >= 2) {
-      st.failed += 1; st.rep = Math.max(0, st.rep - 2);
-      st.history.push({ num: c.num, title: c.title, stars: 0, result: 'Başarısız', culprit: culprit.name, day: st.day });
-      st.status = 'closed';
-      await UI.say(who, `${accused.name} da masum çıktı. Bu davadan alındın, Jade. Başsavcı küplere bindi. (İtibar −3)`);
-      await UI.say(null, `(Gerçek katil ${culprit.name} idi. ${G.explainShort(c)})`);
-      G.save();
-      return;
-    }
-    await UI.say(who, `${accused.name} masum çıktı; elimizdeki deliller tutmuyor. Bir hakkın daha var, Jade. Dikkatli ol. (İtibar −1)`);
-    return;
-  }
-  const methodOk = res.method === c.method, motiveOk = res.motive === culprit.motive;
-  const stars = 1 + (methodOk ? 1 : 0) + (motiveOk ? 1 : 0);
-  // Jade'in açıklaması
-  await UI.say(jade, 'Hepiniz bir yalan söylediniz. Ama yalnızca biriniz cinayet işledi.');
-  for (const line of G.explain(c)) await UI.say(jade, line);
-  await UI.say(jade, `Bunların hepsine uyan tek kişi: ${culprit.name}.`);
-  await UI.say({ name: culprit.name, spec: culprit.spec }, CONFESS[culprit.motive]);
-  SFX.good();
-  const pay = 40 + stars * 40 - k.wrong * 20;
-  const repGain = stars * 2 + (st.day <= st.deadline - 2 ? 1 : 0);
-  st.money += pay; st.rep += repGain; st.solved += 1;
-  st.maxFocus = Math.min(160, st.maxFocus + 5);
-  st.history.push({ num: c.num, title: c.title, stars, result: 'Çözüldü', culprit: culprit.name, day: st.day });
-  st.status = 'closed';
-  const notes = [];
-  if (!methodOk) notes.push(`yöntem aslında “${DATA.METHODS[c.method].label}”`);
-  if (!motiveOk) notes.push(`motif aslında “${DATA.MOTIVES[culprit.motive].label}”`);
-  await UI.say(who, `Harika iş, Jade. ${'★'.repeat(stars)}${'☆'.repeat(3 - stars)}${notes.length ? ' (Ama ' + notes.join(', ') + '.)' : ''} Prim: $${pay}, itibar +${repGain}, maksimum odak +5.`);
-  await UI.say(who, 'Şimdi git dinlen. Yarın yeni dosya gelir.');
-  await MINI.rankCheck();
-  G.save();
-};
-
-// Olay yeri profilinden kimin elendiğini anlatan cümleler
-G.explain = function (c) {
-  const out = [];
-  const label = { shoe: 'ayak izi', smoke: 'izmarit', hair: 'saç teli', scent: 'koku', hand: 'darbe açısı', vehicle: 'komşunun gördüğü araç' };
-  for (const key of c.sceneAttrs) {
-    const v = c.culpritVals[key];
-    const fit = c.suspects.filter((s) => s.attrs[key] === v).map((s) => s.first);
-    const vtxt = key === 'hand' ? (v === 'sol' ? 'solak bir saldırgan' : 'sağ elini kullanan bir saldırgan') : DATA.ATTRS[key].fmt(v);
-    out.push(`Olay yerindeki ${label[key]}: ${vtxt}. Bu yalnızca ${fit.join(', ')} için geçerli.`);
-  }
-  const C = c.suspects.find((s) => s.role === 'C');
-  if (C.alibi.place) out.push(`Üstelik ${C.first}, mazeret verdiği yerden ölüm saatinden hemen önce ayrılmıştı.`);
-  return out;
-};
-G.explainShort = (c) => {
-  const C = c.suspects.find((s) => s.role === 'C');
-  return c.sceneAttrs.map((k) => `${DATA.ATTRS[k].label}: ${DATA.ATTRS[k].fmt(C.attrs[k])}`).join(', ');
-};
+G.closeScene = function (id) { const sc = G.state.scenes[id]; if (sc) sc.closed = true; };
 
 window.addEventListener('load', G.init);

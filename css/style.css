@@ -210,3 +210,54 @@ body.touch.dlg-open #touch { display: none; }
   .title-box h1 { font-size: 34px; }
   #toasts { top: 70px; }
 }
+
+/* ---------------- v2 eklemeleri */
+#hc-extra { font-size: 12px; color: #6b2a2a; margin-top: 2px; }
+#hc-extra:empty { display: none; }
+.fbar.sus { background: #3a1414; }
+#h-sus { height: 100%; background: linear-gradient(#ff8a7a, #c0392b); transition: width .4s; }
+.lbl.sus { color: #a3241c; font-weight: 700; }
+.body-head { display: flex; gap: 12px; align-items: center; margin: 4px 0 8px; }
+.body-head .nm { font-weight: 700; font-size: 18px; }
+.small-head { margin: 6px 0; }
+.small-head .nm { font-size: 15px; }
+.pockets { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; }
+.pocket { background: #fffaf0; border: 2px solid var(--wood); border-radius: 6px; padding: 8px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.pocket.done { border-style: dashed; }
+.pocket .pk-t { font-weight: 700; }
+.pocket .item { font-size: 14px; background: #f3ead6; border-left: 3px solid var(--gold); padding: 4px 6px; border-radius: 3px; }
+.mini-btn.alt { background: #c9a6ff; }
+.dbform { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 8px; }
+.dbf { display: flex; flex-direction: column; gap: 3px; font-size: 14px; }
+.dbf select, input.search { font-family: inherit; font-size: 15px; padding: 5px 8px; border: 2px solid var(--wood); border-radius: 4px; background: #fffaf0; color: var(--ink); }
+input.search { width: 100%; margin: 6px 0; }
+.plist, .dbout { display: flex; flex-direction: column; gap: 5px; margin-top: 6px; }
+.prow { display: flex; gap: 10px; align-items: center; background: #fffaf0; border: 2px solid #d9c8a0; border-radius: 6px; padding: 5px 8px; }
+.prow.pick { cursor: pointer; }
+.prow.pick:hover { border-color: var(--bad); background: #ffefe9; }
+.prow .pinfo { min-width: 0; }
+.prow .nm { font-weight: 700; }
+.opt.wide { display: block; width: 100%; text-align: left; margin: 5px 0; padding: 8px 10px; }
+ul.tasks li.urgent { color: #a3241c; font-weight: 600; }
+.org { display: flex; flex-direction: column; gap: 10px; align-items: center; margin: 10px 0; padding: 10px; background: #2b2420; border-radius: 8px; }
+.org-row { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+.node { background: #3a302a; color: #f7ead0; border: 2px solid #5a4a3a; border-radius: 6px; padding: 6px 8px; min-width: 84px; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.node.exposed { border-color: var(--gold); background: #4a3a24; }
+.node .q { width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; font-size: 22px; background: #1f1a17; border-radius: 4px; }
+.node .code { font-weight: 700; color: var(--gold); }
+.susbar { height: 16px; background: #3a1414; border: 2px solid var(--ink); border-radius: 4px; overflow: hidden; }
+.susbar > div { height: 100%; background: linear-gradient(#ff8a7a, #c0392b); }
+.interlude { position: fixed; inset: 0; z-index: 60; background: radial-gradient(ellipse at center, rgba(10,8,6,.85), rgba(0,0,0,.97)); display: flex; align-items: center; justify-content: center; padding: 14px; cursor: pointer; animation: fadein .4s; }
+@keyframes fadein { from { opacity: 0; } }
+.phone { width: min(420px, 100%); max-height: calc(100vh - 28px); background: #111; border: 3px solid #333; border-radius: 22px; padding: 14px; box-shadow: 0 0 40px rgba(232,195,90,.15); display: flex; flex-direction: column; color: #e8e6df; font-family: ui-monospace, "Courier New", monospace; }
+.ph-head { text-align: center; font-size: 13px; letter-spacing: 2px; color: #9a9a90; padding-bottom: 8px; border-bottom: 1px solid #333; }
+.ph-head b { color: var(--gold); }
+.ph-head .lock { color: #c0392b; animation: blink 1s infinite; }
+@keyframes blink { 50% { opacity: .2; } }
+.ph-body { flex: 1; overflow: auto; display: flex; flex-direction: column; gap: 8px; padding: 10px 2px; min-height: 160px; }
+.msg { max-width: 85%; padding: 7px 10px; border-radius: 10px; font-size: 14px; line-height: 1.35; }
+.msg.l { align-self: flex-start; background: #2a2a2a; }
+.msg.r { align-self: flex-end; background: #4a3a14; }
+.msg .who { font-size: 11px; color: var(--gold); margin-bottom: 2px; }
+.ph-hint { text-align: center; font-size: 11px; color: #666; padding-top: 6px; }
+@media (prefers-reduced-motion: reduce) { .interlude, .ph-head .lock, #dlg-next { animation: none; } }

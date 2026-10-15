@@ -321,3 +321,198 @@ DATA.RANKS = [
   { rep: 28, name: 'Usta Mentalist' },
   { rep: 45, name: 'Efsanevi Aldatıcı' },
 ];
+
+// =====================================================================================
+// GENİŞLETİLMİŞ DÜNYA VERİSİ (v2)
+// =====================================================================================
+Object.assign(DATA.PLACES, {
+  fbi: { name: 'FBI Saha Ofisi', short: 'FBI' },
+  cityhall: { name: 'Belediye Binası', short: 'Belediye' },
+  bank: { name: 'Sunset Koyu Bankası', short: 'Banka' },
+  library: { name: 'Halk Kütüphanesi', short: 'Kütüphane' },
+  restaurant: { name: 'Zeytin Dalı Restoran', short: 'Restoran' },
+  church: { name: 'Aziz Mark Kilisesi', short: 'Kilise' },
+  shop: { name: 'Köşe Bakkalı', short: 'Bakkal' },
+  market: { name: 'Balık Hali', short: 'Balık Hali' },
+  school: { name: 'Sunset Koyu Lisesi', short: 'Lise' },
+  newspaper: { name: 'Koy Postası Gazetesi', short: 'Gazete' },
+  park: { name: 'Merkez Parkı', short: 'Park' },
+  cemetery: { name: 'Eski Mezarlık', short: 'Mezarlık' },
+  docks: { name: 'Liman İskelesi', short: 'İskele' },
+  lighthouse: { name: 'Deniz Feneri', short: 'Fener' },
+  town: { name: 'Sunset Koyu sokakları', short: 'Sokak' },
+});
+
+DATA.NAMES_M = DATA.NAMES_M.concat(['Henry', 'Jasper', 'Miles', 'Oscar', 'Peter', 'Quentin', 'Roman', 'Sebastian', 'Tobias', 'Walter', 'Xavier', 'Zane', 'Benedict', 'Cyrus', 'Dexter', 'Edgar', 'Frank', 'George', 'Harvey', 'Isaac', 'Jonah', 'Kurt', 'Louis', 'Mason', 'Neil', 'Patrick', 'Ralph', 'Stanley', 'Vince', 'Wesley', 'Abel', 'Boris']);
+DATA.NAMES_F = DATA.NAMES_F.concat(['Alice', 'Bella', 'Cora', 'Diana', 'Eve', 'Flora', 'Gemma', 'Helen', 'Irene', 'Joan', 'Kate', 'Laura', 'Mabel', 'Nina', 'Opal', 'Paula', 'Rita', 'Sara', 'Tessa', 'Una', 'Vera', 'Wendy', 'Yara', 'Zoe', 'Agnes', 'Bonnie', 'Carla', 'Della', 'Edith', 'Faye', 'Grace', 'Holly']);
+DATA.SURNAMES = DATA.SURNAMES.concat(['Abbott', 'Bishop', 'Carver', 'Dunn', 'Ellis', 'Foster', 'Garner', 'Hayes', 'Ingram', 'Jensen', 'Keller', 'Lambert', 'Monroe', 'Nash', 'Orton', 'Pierce', 'Reyes', 'Shaw', 'Turner', 'Underwood', 'Walsh', 'York', 'Barlow', 'Cole', 'Dalton', 'Fisher', 'Gallo', 'Hughes', 'Lowe', 'Marsh']);
+
+DATA.STREETS = ['Meşe Sokak', 'Çınar Caddesi', 'Gül Sokak', 'Ihlamur Yolu', 'Sahil Caddesi', 'Fener Sokak', 'Kuzey Bulvarı'];
+
+// İş yerleri: yer -> [meslek, kişi sayısı]
+DATA.WORKPLACES = {
+  station: [['polis memuru', 3]],
+  fbi: [['FBI ajanı', 4], ['FBI analisti', 1]],
+  cityhall: [['belediye memuru', 3], ['başsavcı yardımcısı', 1]],
+  bank: [['banka veznedarı', 3], ['banka müdürü', 1]],
+  library: [['kütüphaneci', 2]],
+  restaurant: [['aşçı', 2], ['garson', 2]],
+  cafe: [['barista', 2]],
+  bar: [['barmen', 1], ['garson', 1]],
+  hotel: [['otel görevlisi', 2]],
+  gallery: [['ressam', 2], ['galeri asistanı', 1]],
+  church: [['rahip', 1], ['orgcu', 1]],
+  shop: [['bakkal', 2]],
+  market: [['balıkçı', 4]],
+  school: [['öğretmen', 4]],
+  newspaper: [['gazeteci', 3], ['editör', 1]],
+  warehouse: [['liman işçisi', 6], ['vardiya amiri', 1]],
+  vineyard: [['bağ işçisi', 3]],
+  lighthouse: [['fener bekçisi', 1]],
+};
+DATA.FREE_JOBS = ['emekli', 'emekli', 'emekli', 'serbest yazar', 'tamirci', 'tesisatçı', 'hemşire', 'emlakçı', 'fotoğrafçı', 'müzisyen', 'işsiz', 'öğrenci', 'avukat', 'muhasebeci', 'terzi', 'ev hanımı'];
+
+DATA.PERSONALITY = {
+  'neşeli': ['Güzel bir gün, değil mi? Deniz bugün pırıl pırıl!', 'Ah, ünlü danışman! Bir gün benim de aklımı okur musunuz?'],
+  'huysuz': ['Ne istiyorsun? Çabuk ol, işim var.', 'Bu kasabada kimse kimseyi rahat bırakmıyor.'],
+  'meraklı': ['Doğru mu, yine mi cinayet? Anlatsana, kim, nasıl?', 'Sizi gazetede gördüm! Gerçekten zihin mi okuyorsunuz?'],
+  'çekingen': ['Ş-şey... Merhaba.', 'Ben... bir şey yapmadım. Sadece yürüyordum.'],
+  'dedikoducu': ['Duydun mu? Banka müdürü yine geç saatte ofisteymiş!', 'Fener bekçisi gece birileriyle buluşuyormuş, ben söylemedim!'],
+  'kibirli': ['Benim zamanım değerlidir, danışman bey.', 'Bu kasabanın yarısı bana borçlu, biliyor musunuz?'],
+  'nazik': ['Hoş geldiniz! Bir şey lazımsa söyleyin lütfen.', 'Polis olmak zor iş. Size kolay gelsin.'],
+  'paranoyak': ['Sen de onlardan mısın? Takip ediliyoruz, biliyorum!', 'Telefonları dinliyorlar. Hepsini. Biliyorum.'],
+};
+
+DATA.JOB_TALK = {
+  'balıkçı': 'Sabah dörtte denizdeydim. Bugün levrek bol.',
+  'liman işçisi': 'Konteynerler gece de iner. Kimse neyin geldiğini sormaz.',
+  'gazeteci': 'Bir haber kokusu alırsan bana da söyle, danışman.',
+  'öğretmen': 'Çocuklar bugün yine Jade’i konuşuyordu. Ünlüsün!',
+  'emekli': 'Benim zamanımda böyle cinayetler olmazdı... Olurdu aslında.',
+  'FBI ajanı': 'SSB işlerine burnumuzu sokmuyoruz. Resmi olarak.',
+  'banka veznedarı': 'Son zamanlarda tuhaf para transferleri var. Söylemedim tabii.',
+  'rahip': 'Günah çıkarma gizlidir, Bay Jade. Ama Tanrı her şeyi görür.',
+};
+
+// Yaygın eşyalar (ceset aramada)
+DATA.POCKETS = ['Ceket iç cebi', 'Pantolon cebi', 'Sol el', 'Gömlek cebi', 'Ayakkabı', 'Yaka astarı'];
+
+// =====================================================================================
+// LION LION — Yozlaşmış CIA-FBI ağı
+// =====================================================================================
+DATA.NET = {
+  name: 'Aslan Ağı',
+  code: 'LION LION',
+  fieldCodenames: ['Karga', 'Tilki', 'Gölge', 'Akrep', 'Baykuş', 'Çakal'],
+  handlerCodenames: ['Çoban', 'Kurye', 'Saat'],
+  beaCodename: 'Yellow Bea',
+  lionCodename: 'Aslan',
+  lionJobs: ['FBI Saha Ofisi Müdürü', 'Belediye Başkanı', 'Senatör'],
+  beaJobs: ['FBI özel ajanı', 'FBI İç İşler ajanı', 'Başsavcı', 'CIA irtibat subayı', 'Belediye danışmanı'],
+  dropSpots: [
+    { id: 'booth', label: 'parktaki kırmızı telefon kulübesi' },
+    { id: 'crypt', label: 'mezarlıktaki eski türbe' },
+    { id: 'bench', label: 'fenerin yanındaki bank' },
+  ],
+};
+
+// Ara sahneler (ağın kendi iç yazışmaları). {A}{B}: kod adları, {J}: Jade
+DATA.INTERLUDES = {
+  intro: [
+    ['?', '?', 'Lion Lion.'],
+    ['?', '?', 'Lion Lion. Danışman sorun çıkarıyor mu?'],
+    ['?', '?', 'Henüz değil. Ama o adam herkesin yüzünü okuyor. Telefonları kapalı tut.'],
+    ['?', '?', 'Kimse kimseyi tanımıyor. Emir yukarıdan, iş aşağıya. Unutma.'],
+  ],
+  body: [
+    ['{A}', '{B}', 'Lion Lion. Danışman olay yerinde. Hiçbir şeye dokunma.'],
+    ['{B}', '{A}', 'Lion Lion. Yukarıdan haber var: iz bırakma, tanıdık kimseyi arama.'],
+  ],
+  arrest: [
+    ['{B}', 'Yellow Bea', 'Lion Lion. Bir Karga düştü. Benim adımı bilmiyor, merak etme.'],
+    ['Yellow Bea', '{B}', 'Lion Lion. Bilmediği şeyi söyleyemez. Ama danışman bir ipin ucunu tuttu. Ölü noktayı değiştir.'],
+  ],
+  frame: [
+    ['Yellow Bea', '{B}', 'Lion Lion. Fincanı hazırla. Bergamot. Parmak izi temiz kalsın, sadece onunki.'],
+    ['{B}', 'Yellow Bea', 'Lion Lion. Tamam. Ya bir şey görürse?'],
+    ['Yellow Bea', '{B}', 'Görsün. Kimse bir yalancıya inanmaz. Ve o adam yıllardır herkese yalan söylüyor.'],
+  ],
+  bea_rise: [
+    ['Aslan', 'Yellow Bea', 'Lion Lion. Danışman çok yaklaştı.'],
+    ['Yellow Bea', 'Aslan', 'Lion Lion. Endişelenme. Yakında herkes katilin o olduğunu düşünecek.'],
+  ],
+};
+
+// Seri katil imzaları
+DATA.SERIAL = {
+  names: ['Kâğıt Turna Katili', 'Gece Bahçıvanı', 'Satranç Oyuncusu'],
+  signatures: [
+    { item: 'Katlanmış kâğıt turna', text: 'Kurbanın avucuna özenle katlanmış beyaz bir kâğıt turna bırakılmış.' },
+    { item: 'Tek bir siyah gül', text: 'Kurbanın göğsüne dikensiz, tek bir siyah gül konmuş.' },
+    { item: 'Fildişi satranç piyonu', text: 'Kurbanın cebine fildişi bir satranç piyonu yerleştirilmiş.' },
+  ],
+  notes: [
+    'Bir tane daha. Beni bulana kadar devam edecek miyim, Jade?',
+    'Sen insanları okuyorsun. Peki beni okuyabildin mi?',
+    'Her ölüm bir ipucu. Saymayı biliyor musun?',
+    'Yaklaştın. Ama yaklaşmak yetmez.',
+    'Son hamle. Şah mat sana mı, bana mı?',
+  ],
+};
+
+// Yellow Bea'nın kurgu delilleri (Jade aleyhine)
+DATA.FRAMES = [
+  {
+    id: 'cup', title: 'Jade’in çay fincanı',
+    text: 'Olay yerinde Jade’in karakoldaki mavi fincanı bulundu. Bergamot çayı kalıntısı ve üzerinde yalnızca Jade’in parmak izleri var.',
+    facts: [
+      { t: 'Fincanın kulpunda Jade’in parmak izleri net.', fake: false },
+      { t: 'Fincanın İÇ kenarında hiç dudak izi yok; kimse bu fincandan içmemiş.', fake: true },
+      { t: 'Fincanda bergamot çayı kalıntısı var.', fake: false },
+      { t: 'Fincan karakoldaki rafta duran takımdan.', fake: false },
+    ],
+    why: 'Çay içilmiş bir fincanda dudak izi olur. Bu fincan oraya içilmeden, sadece BIRAKILMAK için getirilmiş.',
+  },
+  {
+    id: 'card', title: 'Kurbanın cebindeki kartvizit',
+    text: 'Kurbanın cebinden Jade’in el yazısıyla “Saat 23.00’te beni bekle — J.” yazılı bir kartvizit çıktı.',
+    facts: [
+      { t: 'Kartvizit SSB danışmanlarına basılan resmi kartlardan.', fake: false },
+      { t: '“J” harfi sağa yatık; Jade de sağa yatık yazar.', fake: false },
+      { t: 'Mürekkep, karakoldaki kalemlerin mavi mürekkebiyle aynı.', fake: false },
+      { t: 'Yazı, kartın arkasındaki KABARTMA logonun üstünden geçerken kesilmiş; kalem logoyu atlamış. Yazan kişi kartı ters tutmuş: yazı aynadan kopyalanmış.', fake: true },
+    ],
+    why: 'Yazı kabartmanın üzerinden atlıyor; birisi Jade’in el yazısını bir kâğıttan ters çevirip kopyalamış.',
+  },
+  {
+    id: 'car', title: 'Jade’in arabasını gören tanık',
+    text: 'Bir tanık, gece olay yerinin önünde Jade’in eski mavi arabasını gördüğünü iddia ediyor.',
+    facts: [
+      { t: 'Tanık arabanın “açık mavi, eski model” olduğunu söylüyor.', fake: false },
+      { t: 'Tanık arabanın farlarının “yuvarlak ve beyaz” yandığını söylüyor; Jade’in arabasının farları sarı ve döner tiptir.', fake: true },
+      { t: 'Tanık plakayı göremediğini söylüyor.', fake: false },
+      { t: 'Olay yerinin önünde lastik izi var.', fake: false },
+    ],
+    why: 'Tanık başka bir arabayı görmüş ya da ona ne söyleyeceği ezberletilmiş: Jade’in arabasının farları sarıdır.',
+  },
+  {
+    id: 'tea', title: 'Olay yerindeki çay poşetleri',
+    text: 'Olay yerindeki çöpte üç bergamot çay poşeti bulundu; Jade’in bu markayı içtiği herkesçe biliniyor.',
+    facts: [
+      { t: 'Poşetler Jade’in içtiği markadan.', fake: false },
+      { t: 'Poşetler kupkuru; hiç demlenmemiş.', fake: true },
+      { t: 'Çöpte başka çöp yok.', fake: false },
+      { t: 'Poşetler kafeden satın alınmış.', fake: false },
+    ],
+    why: 'Demlenmemiş poşet, içilmemiş çay demek. Biri sadece “Jade buradaydı” izlenimi vermek için koymuş.',
+  },
+];
+
+DATA.CAST.cop.spec = { skin: '#d9a77c', hair: '#2b2430', hairStyle: 'short', top: '#2c3e66', bottom: '#2c3e66', shoes: '#111', hat: { type: 'police', color: '#1f2d4d' }, uniform: true };
+DATA.CAST.jade.spec = { skin: '#f2c9a0', hair: '#e3b84f', hairStyle: 'curly', top: '#f4f1ea', vest: '#5d6270', jacket: '#6c7180', bottom: '#5d6270', shoes: '#5a3a22', eyeColor: '#3a6ad2' };
+DATA.CAST.lena = DATA.CAST.boss;
+DATA.CAST.ortiz.spec = Object.assign({}, DATA.CAST.ortiz.spec, { labcoat: true, jacket: null });
+DATA.CAST.sam.spec = Object.assign({}, DATA.CAST.sam.spec, { labcoat: true, jacket: null });
+DATA.CAST.grace.spec = Object.assign({}, DATA.CAST.grace.spec, { eyeColor: '#3a8a5a' });
+DATA.CAST.kevin.spec = Object.assign({}, DATA.CAST.kevin.spec, { tie: '#2b2f38' });
+DATA.CAST.ray.spec = Object.assign({}, DATA.CAST.ray.spec, { tie: '#7a2f3a' });
